@@ -1,0 +1,31 @@
+# Private implementation specification and local decision records.
+/SPEC.md
+/.local/
+
+# Python environments, caches, and build outputs.
+/.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+/.pytest_cache/
+/.ruff_cache/
+/.coverage
+/htmlcov/
+/build/
+/dist/
+
+# Materialized data, model weights, and experiment runs.
+/data/*
+!/data/README.md
+/models/*
+!/models/README.md
+/runs/*
+!/runs/README.md
+
+# Local editor and operating-system files.
+.DS_Store
+.idea/
+.vscode/
+.agents/
+.codex/
+

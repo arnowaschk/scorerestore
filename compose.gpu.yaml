@@ -1,0 +1,4 @@
+services:
+  scorerestore:
+    gpus: all
+

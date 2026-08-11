@@ -1,0 +1,17 @@
+.git
+.agents
+.codex
+.local
+.venv
+SPEC.md
+__pycache__
+*.py[cod]
+.pytest_cache
+.ruff_cache
+build
+dist
+data
+models
+runs
+tests
+

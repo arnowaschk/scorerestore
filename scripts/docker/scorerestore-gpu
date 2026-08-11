@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+project_root="$(cd -- "${script_dir}/../.." && pwd)"
+
+exec docker compose \
+  --project-directory "${project_root}" \
+  -f "${project_root}/compose.yaml" \
+  -f "${project_root}/compose.gpu.yaml" \
+  run --rm scorerestore scorerestore "$@"
+

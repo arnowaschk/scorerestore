@@ -1,0 +1,11 @@
+services:
+  scorerestore:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: scorerestore:0.1.0
+    volumes:
+      - ./data:/data
+      - ./models:/models
+      - ./runs:/runs
+
