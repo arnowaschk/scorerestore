@@ -21,6 +21,5 @@ uv run scorerestore inspect provenance
 ```
 
 Do not edit or replace a source without reviewing its rights again and updating its hash, source
-URL, verification date, and notes. Rendering compatibility is intentionally addressed in Milestone
-2; Milestone 1 validates provenance and source integrity only.
-
+URL, verification date, and notes. Milestone 2 renders sources through a converted temporary copy;
+the rights-cleared source bytes in this directory remain unchanged.

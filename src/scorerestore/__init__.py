@@ -10,4 +10,17 @@ from typing import Final
 
 __version__: Final = "0.1.0"
 
-__all__ = ["__version__"]
+from scorerestore.degradation import (
+    DegradationConfig,
+    DegradationPipeline,
+    DegradationResult,
+    degrade,
+)
+
+__all__ = [
+    "DegradationConfig",
+    "DegradationPipeline",
+    "DegradationResult",
+    "__version__",
+    "degrade",
+]

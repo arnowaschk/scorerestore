@@ -19,6 +19,16 @@ jobs:
         with:
           version: "0.11.20"
           enable-cache: true
+      - name: Install pinned LilyPond
+        run: |
+          mkdir -p .tools
+          curl --fail --location --silent --show-error \
+            https://gitlab.com/lilypond/lilypond/-/releases/v2.26.0/downloads/lilypond-2.26.0-linux-x86_64.tar.gz \
+            --output .tools/lilypond.tar.gz
+          echo "cd8a097a9f52cb2b9f4e7914774786f203f4fc61fcd299afcbb63c23fa5c6b24  .tools/lilypond.tar.gz" \
+            | sha256sum --check --strict
+          tar -xzf .tools/lilypond.tar.gz -C .tools
+          echo "$GITHUB_WORKSPACE/.tools/lilypond-2.26.0/bin" >> "$GITHUB_PATH"
       - name: Install locked development environment
         run: uv sync --frozen --group dev
       - name: Lint
@@ -29,6 +39,8 @@ jobs:
         run: uv run pytest
       - name: Native CLI smoke check
         run: uv run scorerestore --help
+      - name: Inspect pinned environment
+        run: uv run scorerestore inspect environment
       - name: Validate bundled score provenance
         run: uv run scorerestore inspect provenance
 
@@ -42,3 +54,5 @@ jobs:
         run: docker compose build
       - name: Container CLI smoke check
         run: docker compose run --rm scorerestore scorerestore --help
+      - name: Container environment check
+        run: docker compose run --rm scorerestore scorerestore inspect environment

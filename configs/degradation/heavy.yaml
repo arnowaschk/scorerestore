@@ -1,0 +1,21 @@
+preset: heavy
+operation_count: [8, 12]
+blur:
+  enabled: true
+  radius: [1.0, 2.4]
+gaussian_noise:
+  enabled: true
+  sigma: [7.0, 14.0]
+uneven_illumination:
+  enabled: true
+  strength: [0.15, 0.32]
+  grid_size: [3, 6]
+jpeg:
+  enabled: true
+  quality: [38, 65]
+stains:
+  enabled: true
+  opacity: [0.12, 0.30]
+  blob_count: [5, 14]
+  blob_radius_fraction: [0.010, 0.045]
+  speckle_density: [0.00025, 0.00080]

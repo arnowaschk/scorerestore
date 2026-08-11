@@ -19,6 +19,8 @@ classifiers = [
   "Programming Language :: Python :: 3.12",
 ]
 dependencies = [
+  "numpy>=2.2,<3",
+  "Pillow>=11.3,<13",
   "PyYAML>=6.0.2,<7",
 ]
 

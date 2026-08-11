@@ -1,6 +1,9 @@
 # Configuration
 
-ScoreRestore uses YAML-first configuration. Milestone-specific example configurations will be
-added alongside the functionality that consumes them; this avoids publishing nonfunctional
-dataset, training, or benchmark settings in the Milestone 0 scaffold.
+ScoreRestore uses YAML-first configuration. The `degradation/` directory contains the four V1
+photometric presets: `light`, `medium`, `heavy`, and seeded `random`. Each file defines an inclusive
+operation-count range and severity bounds for exactly the five V1 degradation families. The actual
+selection, order, sampled parameters, and per-operation seeds are recorded in every output recipe.
 
+Dataset, training, and benchmark configurations will be added only with the milestones that
+consume them.

@@ -9,6 +9,9 @@ ScoreRestore does not distribute a prebuilt container image at this milestone.
 | Python | 3.12.11 | Python-2.0 | Runtime and Docker base | https://www.python.org/ | Docker build uses the official `python:3.12.11-slim-bookworm` image. |
 | Debian | bookworm-slim base | Multiple free-software licenses | Base operating-system packages | https://www.debian.org/ | Consult package-level copyright files if distributing a built image. |
 | uv | 0.11.20 | Apache-2.0 OR MIT | Locked dependency installation | https://github.com/astral-sh/uv | Copied from the versioned official uv container image during build. |
+| LilyPond | 2.26.0 | GPL-3.0-or-later | Score engraving and semantic render passes | https://gitlab.com/lilypond/lilypond/-/releases/v2.26.0 | Docker builds download and checksum the official binary. Audit GPL source/notice obligations before distributing a prebuilt ScoreRestore image. |
+| NumPy | 2.4.6 (Python 3.11), 2.5.2 (Python 3.12) | BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0 | Deterministic numerical image degradation | https://numpy.org/ | Runtime Python dependency; license expression and exact platform resolutions are recorded in installed metadata and `uv.lock`. |
+| Pillow | 12.3.0 | MIT-CMU | Rendering-mask processing, QA panels, and image degradation | https://python-pillow.org/ | Runtime Python dependency; exact resolution is in `uv.lock`. |
 | PyYAML | 6.0.3 | MIT | YAML configuration parsing | https://pyyaml.org/ | Runtime Python dependency; exact resolution is in `uv.lock`. |
 | Hatchling | 1.27.0 | MIT | Python package build backend | https://github.com/pypa/hatch | Build-time Python dependency pinned in `pyproject.toml`. |
 | pytest | 8.4.2 | MIT | Test runner | https://pytest.org/ | Development and CI dependency only; exact resolution is in `uv.lock`. |

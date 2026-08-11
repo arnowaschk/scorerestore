@@ -29,3 +29,5 @@ __pycache__/
 .agents/
 .codex/
 
+degraded.png
+degraded.recipe.json

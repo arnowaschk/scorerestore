@@ -4,6 +4,11 @@ from pathlib import Path
 
 import yaml
 
+from scorerestore.lilypond.constants import (
+    LILYPOND_LINUX_X86_64_SHA256,
+    LILYPOND_VERSION,
+)
+
 PROJECT_ROOT = Path(__file__).parents[2]
 
 
@@ -32,6 +37,10 @@ def test_dockerfile_uses_versioned_images() -> None:
 
     assert "FROM ghcr.io/astral-sh/uv:0.11.20 AS uv" in dockerfile
     assert "FROM python:3.12.11-slim-bookworm" in dockerfile
+    assert f"ARG LILYPOND_VERSION={LILYPOND_VERSION}" in dockerfile
+    assert f"ARG LILYPOND_SHA256={LILYPOND_LINUX_X86_64_SHA256}" in dockerfile
+    assert "COPY --from=lilypond /opt/lilypond-2.26.0" in dockerfile
+    assert "COPY assets ./assets" in dockerfile
     assert ":latest" not in dockerfile
     assert "uv sync --frozen --no-dev" in dockerfile
 
