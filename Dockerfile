@@ -11,6 +11,7 @@ COPY --from=uv /uv /uvx /bin/
 WORKDIR /app
 
 COPY pyproject.toml uv.lock README.md LICENSE THIRD_PARTY_NOTICES.md ./
+COPY assets ./assets
 COPY configs ./configs
 COPY src ./src
 
@@ -21,4 +22,3 @@ ENV PATH="/app/.venv/bin:${PATH}"
 RUN mkdir -p /data /models /runs
 
 CMD ["scorerestore", "--help"]
-

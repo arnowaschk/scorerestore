@@ -36,7 +36,7 @@ def test_version_is_available(capsys: pytest.CaptureFixture[str]) -> None:
 
 def test_later_milestone_command_fails_explicitly(capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["train"]) == 2
-    assert "not available in Milestone 0" in capsys.readouterr().err
+    assert "reserved for a later" in capsys.readouterr().err
 
 
 def test_dataset_reproduce_requires_sample_id() -> None:
@@ -51,3 +51,11 @@ def test_dataset_reproduce_is_an_explicit_placeholder(
 ) -> None:
     assert main(["dataset", "reproduce", "sample-1"]) == 2
     assert "dataset reproduce" in capsys.readouterr().err
+
+
+def test_inspect_help_lists_provenance(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit) as exit_info:
+        main(["inspect", "--help"])
+
+    assert exit_info.value.code == 0
+    assert "provenance" in capsys.readouterr().out

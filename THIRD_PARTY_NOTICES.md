@@ -1,8 +1,8 @@
 # Third-party notices
 
-This file records direct software components used to build, run, or test the public ScoreRestore V1
-Milestone 0 scaffold. Transitive Python package versions are pinned in `uv.lock`. ScoreRestore does
-not distribute a prebuilt container image at this milestone.
+This file records direct software components and assets used to build, run, or test the current
+public ScoreRestore V1 implementation. Transitive Python package versions are pinned in `uv.lock`.
+ScoreRestore does not distribute a prebuilt container image at this milestone.
 
 | Component | Version | License | Role | Source/project reference | Redistribution notes |
 |---|---:|---|---|---|---|
@@ -14,4 +14,16 @@ not distribute a prebuilt container image at this milestone.
 | pytest | 8.4.2 | MIT | Test runner | https://pytest.org/ | Development and CI dependency only; exact resolution is in `uv.lock`. |
 | Ruff | 0.16.2 | MIT | Linting and formatting | https://github.com/astral-sh/ruff | Development and CI dependency only; exact resolution is in `uv.lock`. |
 
-No LilyPond files, datasets, model weights, or score assets are distributed in Milestone 0.
+## Bundled score assets
+
+The following unchanged LilyPond source files are distributed as the Milestone 1 starter corpus.
+Their exact source URLs, SHA-256 hashes, composition rights, and source-file rights are recorded in
+`assets/scores/manifest.yaml`.
+
+| Component | Version/identifier | License | Role | Source/project reference | Redistribution notes |
+|---|---|---|---|---|---|
+| Bach, Invention No. 2 LilyPond source | BWV 773; Mutopia-2008/06/15-58 | Public Domain | Score-source starter asset | https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=58 | Composition and contributor typesetting are identified as Public Domain. |
+| Beethoven, Für Elise LilyPond source | WoO 59; Mutopia-2015/08/18-931 | Public Domain | Score-source starter asset | https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=931 | Composition, 1888 source edition, and contributor typesetting are identified as Public Domain. |
+| Foster, Hard Times Come Again No More LilyPond source | Mutopia-2014/03/24-371 | Public Domain | Voice/lyrics score-source starter asset | https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=371 | Composition, source edition, and contributor typesetting are identified as Public Domain. |
+
+No generated datasets or model weights are distributed in Milestone 1.

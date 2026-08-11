@@ -29,6 +29,8 @@ jobs:
         run: uv run pytest
       - name: Native CLI smoke check
         run: uv run scorerestore --help
+      - name: Validate bundled score provenance
+        run: uv run scorerestore inspect provenance
 
   container:
     runs-on: ubuntu-24.04
@@ -40,4 +42,3 @@ jobs:
         run: docker compose build
       - name: Container CLI smoke check
         run: docker compose run --rm scorerestore scorerestore --help
-

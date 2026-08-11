@@ -1,0 +1,71 @@
+schema_version: 1
+scores:
+  - id: bach-bwv773-invention-02
+    title: Invention No. 2 in C minor
+    composer: Johann Sebastian Bach
+    work_identifier: BWV 773
+    source_url: https://www.mutopiaproject.org/ftp/BachJS/BWV773/bach-invention-02/bach-invention-02.ly
+    source_file: sources/bach-bwv773-invention-02.ly
+    source_sha256: e0620dcc2b529283b7e84e60fe12e19e940f95e690ca252d7e70b656b737e003
+    composition_rights:
+      status: public_domain
+      basis: >-
+        Johann Sebastian Bach died in 1750, and the Mutopia catalog entry identifies the
+        Bach-Gesellschaft source and the work as Public Domain.
+    source_file_rights:
+      status: public_domain
+      basis: >-
+        The Mutopia contributor placed this LilyPond typesetting in the public domain, as stated
+        in the embedded source header and Mutopia's license record.
+    verified_date: 2026-08-11
+    catalog_url: https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=58
+    license_url: https://www.mutopiaproject.org/legal.html
+    upstream_lilypond_version: 2.11.46
+    notes: Two-voice keyboard counterpoint with ornaments and independent hands.
+
+  - id: beethoven-woo59-fur-elise
+    title: Für Elise
+    composer: Ludwig van Beethoven
+    work_identifier: WoO 59
+    source_url: https://www.mutopiaproject.org/ftp/BeethovenLv/WoO59/fur_Elise_WoO59/fur_Elise_WoO59.ly
+    source_file: sources/beethoven-woo59-fur-elise.ly
+    source_sha256: 828a7bd1b42e441fe1b0eb0389ba46f1502dab28bbe488389e635fb446ba7a67
+    composition_rights:
+      status: public_domain
+      basis: >-
+        Ludwig van Beethoven died in 1827, and the Mutopia catalog entry identifies the 1888
+        Breitkopf & Härtel source and the work as Public Domain.
+    source_file_rights:
+      status: public_domain
+      basis: >-
+        The Mutopia contributor placed this LilyPond typesetting in the public domain, as stated
+        in the embedded source header and Mutopia's license record.
+    verified_date: 2026-08-11
+    catalog_url: https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=931
+    license_url: https://www.mutopiaproject.org/legal.html
+    upstream_lilypond_version: 2.18.2
+    notes: Piano work with dynamics, articulations, tuplets, grace notes, and multiple voices.
+
+  - id: foster-hard-times
+    title: Hard Times Come Again No More
+    composer: Stephen Collins Foster
+    work_identifier: Mutopia-2014/03/24-371
+    source_url: https://www.mutopiaproject.org/ftp/FosterSC/hardtimes/hardtimes.ly
+    source_file: sources/foster-hard-times.ly
+    source_sha256: 8b7c3a06b6272a0ce552fe14124c867fa7f076c79190eb984b618a635fd813c6
+    composition_rights:
+      status: public_domain
+      basis: >-
+        Stephen Collins Foster died in 1864, and the Mutopia catalog entry identifies the 1854
+        Foster's Melodies source and the work as Public Domain.
+    source_file_rights:
+      status: public_domain
+      basis: >-
+        The Mutopia contributor placed this LilyPond typesetting in the public domain, as stated
+        in the embedded source header and Mutopia's license record.
+    verified_date: 2026-08-11
+    catalog_url: https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=371
+    license_url: https://www.mutopiaproject.org/legal.html
+    upstream_lilypond_version: 2.18.0
+    notes: Voice-and-piano song with lyrics, several vocal staves, and instrument labels.
+

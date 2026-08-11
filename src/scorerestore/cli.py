@@ -5,11 +5,14 @@ from __future__ import annotations
 import argparse
 import sys
 from collections.abc import Sequence
+from pathlib import Path
 
 from scorerestore import __version__
+from scorerestore.provenance import ProvenanceValidationError, validate_score_manifest
 
-_MILESTONE_MESSAGE = (
-    "{command} is part of the public ScoreRestore V1 interface but is not available in Milestone 0."
+_NOT_IMPLEMENTED_MESSAGE = (
+    "{command} is part of the public ScoreRestore V1 interface but is reserved for a later "
+    "milestone and is not implemented yet."
 )
 
 
@@ -32,11 +35,24 @@ def build_parser() -> argparse.ArgumentParser:
         ("evaluate", "Evaluate a model and create reports (Milestone 9)"),
         ("infer", "Restore and segment input pages (Milestone 8)"),
         ("baseline", "Run the classical computer-vision baseline (Milestone 5)"),
-        ("inspect", "Inspect datasets, masks, predictions, or the environment"),
         ("degrade", "Apply reproducible synthetic degradation (Milestone 3)"),
     ):
         command_parser = commands.add_parser(name, help=help_text, description=help_text)
         command_parser.set_defaults(command_path=name)
+
+    inspect = commands.add_parser("inspect", help="Inspect provenance and later V1 artifacts")
+    inspect.set_defaults(command_path="inspect")
+    inspect_commands = inspect.add_subparsers(dest="inspect_command", metavar="COMMAND")
+    provenance = inspect_commands.add_parser(
+        "provenance", help="Validate bundled score provenance, rights, and hashes"
+    )
+    provenance.add_argument(
+        "--manifest",
+        type=Path,
+        default=Path("assets/scores/manifest.yaml"),
+        help="score manifest path (default: assets/scores/manifest.yaml)",
+    )
+    provenance.set_defaults(command_path="inspect provenance", handler=_validate_provenance)
 
     dataset = commands.add_parser("dataset", help="Dataset maintenance commands")
     dataset_commands = dataset.add_subparsers(
@@ -55,6 +71,25 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     parser = build_parser()
     args = parser.parse_args(argv)
+    handler = getattr(args, "handler", None)
+    if handler is not None:
+        return handler(args)
     command_path = args.command_path
-    print(_MILESTONE_MESSAGE.format(command=command_path), file=sys.stderr)
+    print(_NOT_IMPLEMENTED_MESSAGE.format(command=command_path), file=sys.stderr)
     return 2
+
+
+def _validate_provenance(args: argparse.Namespace) -> int:
+    try:
+        report = validate_score_manifest(args.manifest)
+    except ProvenanceValidationError as error:
+        print(f"Provenance validation failed for {args.manifest}:", file=sys.stderr)
+        for detail in error.errors:
+            print(f"- {detail}", file=sys.stderr)
+        return 1
+
+    print(
+        f"Validated {len(report.assets)} score source(s) and "
+        f"{report.verified_hashes} SHA-256 hash(es) from {args.manifest}."
+    )
+    return 0

@@ -8,8 +8,15 @@ system.**
 
 This repository currently contains the Milestone 0 project scaffold. Dataset generation, model
 training, evaluation, and inference commands are visible in the CLI but intentionally report that
-they are unavailable until their specified V1 milestones are implemented. No benchmark or quality
-claims are made at this stage.
+they are unavailable until their specified V1 milestones are implemented. Milestone 1 adds a small
+rights-cleared score-source corpus and strict provenance validation. No benchmark or quality claims
+are made at this stage.
+
+Validate the bundled score sources, rights declarations, and SHA-256 hashes:
+
+```bash
+uv run scorerestore inspect provenance
+```
 
 ## Native scaffold check
 
@@ -45,7 +52,6 @@ image contains no PyTorch or model code yet, so this command only validates the 
 
 ## License
 
-ScoreRestore source code is licensed under Apache-2.0. Third-party components are listed in
-`THIRD_PARTY_NOTICES.md`. Training assets and their provenance will be introduced and validated in
-Milestone 1; none are bundled in this scaffold.
-
+ScoreRestore source code is licensed under Apache-2.0. Third-party components and bundled assets are
+listed in `THIRD_PARTY_NOTICES.md`. Each score source has separate composition and source-file rights
+metadata in `assets/scores/manifest.yaml` and is integrity-checked before use.
