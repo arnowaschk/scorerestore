@@ -4,6 +4,7 @@
 
 # Python environments, caches, and build outputs.
 /.venv/
+/.tools/
 __pycache__/
 *.py[cod]
 *.egg-info/
