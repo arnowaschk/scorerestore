@@ -1,6 +1,7 @@
 """LilyPond rendering support for exact ScoreRestore ground truth."""
 
 from scorerestore.lilypond.renderer import (
+    LilyPondLayoutConfig,
     LilyPondRenderConfig,
     LilyPondRenderError,
     LilyPondRenderResult,
@@ -8,6 +9,7 @@ from scorerestore.lilypond.renderer import (
 )
 
 __all__ = [
+    "LilyPondLayoutConfig",
     "LilyPondRenderConfig",
     "LilyPondRenderError",
     "LilyPondRenderResult",

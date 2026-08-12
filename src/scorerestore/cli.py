@@ -13,6 +13,15 @@ from pathlib import Path
 from PIL import Image, UnidentifiedImageError
 
 from scorerestore import __version__
+from scorerestore.dataset import (
+    DatasetManifestError,
+    generate_dataset,
+    load_dataset_config,
+    reproduce_sample,
+    validate_dataset_manifest,
+)
+from scorerestore.dataset.config import DatasetConfigError
+from scorerestore.dataset.generation import DatasetGenerationError, DatasetReproductionError
 from scorerestore.degradation import (
     PRESET_NAMES,
     DegradationConfigError,
@@ -52,7 +61,6 @@ def build_parser() -> argparse.ArgumentParser:
 
     commands = parser.add_subparsers(dest="command", metavar="COMMAND", required=True)
     for name, help_text in (
-        ("generate", "Generate a materialized synthetic dataset (Milestone 4)"),
         ("train", "Train a ScoreRestore model (Milestone 6)"),
         ("evaluate", "Evaluate a model and create reports (Milestone 9)"),
         ("infer", "Restore and segment input pages (Milestone 8)"),
@@ -60,6 +68,14 @@ def build_parser() -> argparse.ArgumentParser:
     ):
         command_parser = commands.add_parser(name, help=help_text, description=help_text)
         command_parser.set_defaults(command_path=name)
+
+    generation = commands.add_parser("generate", help="Generate a materialized synthetic dataset")
+    generation.add_argument("-c", "--config", type=Path, required=True)
+    generation.add_argument("--output-root", type=Path, default=Path("data/generated"))
+    generation.add_argument(
+        "--lilypond", default="lilypond", help="LilyPond executable (default: lilypond)"
+    )
+    generation.set_defaults(command_path="generate", handler=_generate_dataset)
 
     degradation = commands.add_parser(
         "degrade", help="Apply reproducible pixel-aligned synthetic degradation"
@@ -127,10 +143,25 @@ def build_parser() -> argparse.ArgumentParser:
         dest="dataset_command", metavar="COMMAND", required=True
     )
     reproduce = dataset_commands.add_parser(
-        "reproduce", help="Reproduce a materialized sample (Milestone 4)"
+        "reproduce", help="Reproduce and hash-check a materialized sample"
     )
     reproduce.add_argument("sample_id", metavar="SAMPLE_ID")
-    reproduce.set_defaults(command_path="dataset reproduce")
+    reproduce.add_argument("--data-root", type=Path, default=Path("data/generated"))
+    reproduce.add_argument("--dataset-id")
+    reproduce.add_argument(
+        "--source-manifest", type=Path, default=Path("assets/scores/manifest.yaml")
+    )
+    reproduce.add_argument(
+        "--lilypond", default="lilypond", help="LilyPond executable (default: lilypond)"
+    )
+    reproduce.add_argument("-o", "--output", type=Path)
+    reproduce.set_defaults(command_path="dataset reproduce", handler=_reproduce_sample)
+    validate = dataset_commands.add_parser(
+        "validate", help="Validate a materialized JSONL manifest and artifacts"
+    )
+    validate.add_argument("manifest", type=Path)
+    validate.add_argument("--skip-hashes", action="store_true")
+    validate.set_defaults(command_path="dataset validate", handler=_validate_dataset)
     return parser
 
 
@@ -300,3 +331,77 @@ def _write_degradation_artifacts(
             image_temporary.unlink(missing_ok=True)
         if recipe_temporary is not None:
             recipe_temporary.unlink(missing_ok=True)
+
+
+def _generate_dataset(args: argparse.Namespace) -> int:
+    try:
+        config = load_dataset_config(args.config)
+        result = generate_dataset(
+            config,
+            output_root=args.output_root,
+            lilypond_binary=args.lilypond,
+        )
+    except (
+        DatasetConfigError,
+        DatasetGenerationError,
+        LilyPondRenderError,
+        ProvenanceValidationError,
+        ValueError,
+    ) as error:
+        print(f"Dataset generation failed: {error}", file=sys.stderr)
+        return 1
+    counts = ", ".join(f"{name}={count}" for name, count in result.split_counts.items())
+    print(
+        f"Generated {result.sample_count} sample(s) at {result.dataset_directory}; "
+        f"splits: {counts}; manifest: {result.manifest_path}"
+    )
+    return 0
+
+
+def _reproduce_sample(args: argparse.Namespace) -> int:
+    try:
+        result = reproduce_sample(
+            args.sample_id,
+            data_root=args.data_root,
+            dataset_id=args.dataset_id,
+            source_manifest=args.source_manifest,
+            lilypond_binary=args.lilypond,
+            output_path=args.output,
+        )
+    except (
+        DatasetReproductionError,
+        LilyPondRenderError,
+        ProvenanceValidationError,
+        ValueError,
+    ) as error:
+        print(f"Dataset reproduction failed: {error}", file=sys.stderr)
+        return 1
+    mode = "exact" if result.exact_environment else "best-effort"
+    hashes = result.output_matches and result.clean_matches and result.masks_match
+    print(
+        f"{mode.capitalize()} reproduction for {result.sample_id}: "
+        f"{'all hashes match' if hashes else 'hash differences detected'}"
+    )
+    for difference in result.differences:
+        print(f"- {difference}")
+    if result.output_path is not None:
+        print(f"Reproduced input: {result.output_path}")
+    return 0 if hashes else 1
+
+
+def _validate_dataset(args: argparse.Namespace) -> int:
+    try:
+        report = validate_dataset_manifest(
+            args.manifest,
+            verify_hashes=not args.skip_hashes,
+        )
+    except DatasetManifestError as error:
+        print(f"Dataset manifest validation failed for {args.manifest}:", file=sys.stderr)
+        for detail in error.errors:
+            print(f"- {detail}", file=sys.stderr)
+        return 1
+    print(
+        f"Validated {len(report.records)} sample(s) from {len(report.source_splits)} "
+        f"source(s) in {report.manifest_path}."
+    )
+    return 0

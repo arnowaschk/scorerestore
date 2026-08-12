@@ -1,0 +1,20 @@
+dataset_id: scorerestore-challenge-v1
+seed: 20260811
+target_samples: 32
+source_manifest: assets/scores/manifest.yaml
+dpi: 150
+mask_threshold: 0.5
+strict_unknown_grobs: true
+layout:
+  staff_sizes: [12, 20, 24]
+  paper_formats: [a4, letter]
+  orientations: [portrait, landscape]
+  margin_range_mm: [8, 16]
+  variants_per_combination: 1
+splits:
+  train: 0.0
+  validation: 0.0
+  test: 0.0
+  challenge: 1.0
+degradation_configs: [medium]
+challenge_degradation_config: random

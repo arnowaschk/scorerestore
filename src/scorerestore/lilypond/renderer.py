@@ -10,6 +10,7 @@ import subprocess
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
 from PIL import Image, ImageChops, ImageDraw, ImageOps
 
@@ -39,6 +40,50 @@ class LilyPondRenderError(RuntimeError):
 
 
 @dataclass(frozen=True, slots=True)
+class LilyPondLayoutConfig:
+    """Modest deterministic V1 engraving variation applied to every render pass."""
+
+    staff_size: float
+    paper_format: Literal["a4", "letter"]
+    orientation: Literal["portrait", "landscape"]
+    top_margin_mm: float
+    bottom_margin_mm: float
+    left_margin_mm: float
+    right_margin_mm: float
+
+    def __post_init__(self) -> None:
+        if not 8.0 <= self.staff_size <= 32.0:
+            raise ValueError("staff_size must be within the modest V1 range [8, 32]")
+        if self.paper_format not in {"a4", "letter"}:
+            raise ValueError("paper_format must be 'a4' or 'letter'")
+        if self.orientation not in {"portrait", "landscape"}:
+            raise ValueError("orientation must be 'portrait' or 'landscape'")
+        margins = (
+            self.top_margin_mm,
+            self.bottom_margin_mm,
+            self.left_margin_mm,
+            self.right_margin_mm,
+        )
+        if any(not 3.0 <= margin <= 30.0 for margin in margins):
+            raise ValueError("layout margins must be within the realistic V1 range [3, 30] mm")
+
+    def to_dict(self) -> dict[str, object]:
+        """Return manifest-ready layout parameters."""
+
+        return {
+            "staff_size": self.staff_size,
+            "paper_format": self.paper_format,
+            "orientation": self.orientation,
+            "margins_mm": {
+                "top": self.top_margin_mm,
+                "bottom": self.bottom_margin_mm,
+                "left": self.left_margin_mm,
+                "right": self.right_margin_mm,
+            },
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class LilyPondRenderConfig:
     """Deterministic V1 render settings."""
 
@@ -48,6 +93,7 @@ class LilyPondRenderConfig:
     strict_unknown_grobs: bool = False
     expected_nonempty: tuple[str, ...] = ("staff", "notation")
     timeout_seconds: int = 180
+    layout: LilyPondLayoutConfig | None = None
 
     def __post_init__(self) -> None:
         if self.dpi <= 0:
@@ -184,6 +230,9 @@ def render_score(
             "unknown_grobs": sorted(unknown_grobs),
             "strict_unknown_grobs": render_config.strict_unknown_grobs,
             "grob_registry_entries": len(GROB_CLASS_REGISTRY),
+            "render_parameters": (
+                render_config.layout.to_dict() if render_config.layout is not None else None
+            ),
             "pages": page_metadata,
         }
         metadata_path = result_directory / "metadata.json"
@@ -257,7 +306,9 @@ def _render_passes(
     unknown_grobs: set[str] = set()
     for target in ("pristine", "staff", "notation", "text", "none"):
         wrapper = wrappers / f"{target}.ly"
-        wrapper.write_text(_wrapper_source(target, converted_source), encoding="utf-8")
+        wrapper.write_text(
+            _wrapper_source(target, converted_source, config.layout), encoding="utf-8"
+        )
         output_prefix = raw / target
         stderr = _run_lilypond(
             wrapper,
@@ -274,15 +325,21 @@ def _render_passes(
     return pass_pages, unknown_grobs
 
 
-def _wrapper_source(target: str, converted_source: Path) -> str:
+def _wrapper_source(
+    target: str,
+    converted_source: Path,
+    layout: LilyPondLayoutConfig | None,
+) -> str:
     registry = "\n".join(
         f"    ({name} . {classification})"
         for name, classification in sorted(GROB_CLASS_REGISTRY.items())
     )
     include_path = str(converted_source).replace("\\", "/").replace('"', '\\"')
+    staff_size = f"#(set-global-staff-size {layout.staff_size})\n" if layout else ""
+    paper_override = _paper_override(layout) if layout else ""
     return f'''\\version "{LILYPOND_VERSION}"
 
-#(define scorerestore-target '{target})
+{staff_size}#(define scorerestore-target '{target})
 #(define scorerestore-grob-registry
   '(
 {registry}
@@ -326,6 +383,23 @@ def _wrapper_source(target: str, converted_source: Path) -> str:
 }}
 
 \\include "{include_path}"
+{paper_override}
+'''
+
+
+def _paper_override(layout: LilyPondLayoutConfig) -> str:
+    paper_name = (
+        f"{layout.paper_format}landscape"
+        if layout.orientation == "landscape"
+        else layout.paper_format
+    )
+    return f'''\n\\paper {{
+  #(set-paper-size "{paper_name}")
+  top-margin = {layout.top_margin_mm}\\mm
+  bottom-margin = {layout.bottom_margin_mm}\\mm
+  left-margin = {layout.left_margin_mm}\\mm
+  right-margin = {layout.right_margin_mm}\\mm
+}}
 '''
 
 

@@ -1,0 +1,22 @@
+dataset_id: scorerestore-smoke-v1
+seed: 20260811
+target_samples: 2
+source_manifest: assets/scores/manifest.yaml
+source_ids:
+  - bach-bwv773-invention-02
+dpi: 48
+mask_threshold: 0.5
+strict_unknown_grobs: true
+layout:
+  staff_sizes: [16]
+  paper_formats: [a4]
+  orientations: [portrait]
+  margin_range_mm: [10, 12]
+  variants_per_combination: 1
+splits:
+  train: 1.0
+  validation: 0.0
+  test: 0.0
+  challenge: 0.0
+degradation_configs: [light]
+challenge_degradation_config: random

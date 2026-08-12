@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from scorerestore.cli import main
@@ -46,11 +48,12 @@ def test_dataset_reproduce_requires_sample_id() -> None:
     assert exit_info.value.code == 2
 
 
-def test_dataset_reproduce_is_an_explicit_placeholder(
+def test_dataset_reproduce_reports_missing_sample(
+    tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    assert main(["dataset", "reproduce", "sample-1"]) == 2
-    assert "dataset reproduce" in capsys.readouterr().err
+    assert main(["dataset", "reproduce", "sample-1", "--data-root", str(tmp_path)]) == 1
+    assert "was not found" in capsys.readouterr().err
 
 
 def test_inspect_help_lists_provenance(capsys: pytest.CaptureFixture[str]) -> None:

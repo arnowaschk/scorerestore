@@ -15,7 +15,7 @@ import json
 import platform
 import random
 from collections.abc import Mapping, Sequence
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Literal, TypeAlias
@@ -150,7 +150,34 @@ class DegradationConfig:
     def to_dict(self) -> dict[str, object]:
         """Return a JSON-serializable resolved configuration."""
 
-        return asdict(self)
+        return {
+            "preset": self.preset,
+            "operation_count": _range_list(self.operation_count),
+            "blur": {
+                "enabled": self.blur.enabled,
+                "radius": _range_list(self.blur.radius),
+            },
+            "gaussian_noise": {
+                "enabled": self.gaussian_noise.enabled,
+                "sigma": _range_list(self.gaussian_noise.sigma),
+            },
+            "uneven_illumination": {
+                "enabled": self.uneven_illumination.enabled,
+                "strength": _range_list(self.uneven_illumination.strength),
+                "grid_size": _range_list(self.uneven_illumination.grid_size),
+            },
+            "jpeg": {
+                "enabled": self.jpeg.enabled,
+                "quality": _range_list(self.jpeg.quality),
+            },
+            "stains": {
+                "enabled": self.stains.enabled,
+                "opacity": _range_list(self.stains.opacity),
+                "blob_count": _range_list(self.stains.blob_count),
+                "blob_radius_fraction": _range_list(self.stains.blob_radius_fraction),
+                "speckle_density": _range_list(self.stains.speckle_density),
+            },
+        }
 
 
 @dataclass(frozen=True, slots=True)
@@ -706,6 +733,10 @@ def _sample_float(value_range: FloatRange, rng: random.Random) -> float:
 
 def _sample_int(value_range: IntRange, rng: random.Random) -> int:
     return rng.randint(value_range.minimum, value_range.maximum)
+
+
+def _range_list(value_range: FloatRange | IntRange) -> list[float] | list[int]:
+    return [value_range.minimum, value_range.maximum]
 
 
 def _image_sha256(image: Image.Image) -> str:

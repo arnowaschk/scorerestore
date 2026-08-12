@@ -1,5 +1,6 @@
 # Generated data
 
-Materialized datasets will be written below this directory by later V1 milestones. Generated
-contents are intentionally ignored by Git.
-
+`scorerestore generate` writes materialized datasets below `data/generated/<dataset-id>/` by
+default. Each dataset includes degraded inputs, pristine targets, background/staff/notation/text
+masks, JSONL manifests, recipes, and QA/render reports. Generated contents are intentionally
+ignored by Git; this documentation file is the only tracked exception.

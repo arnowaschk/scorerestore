@@ -7,9 +7,10 @@ predicting independent background, staff, notation, and text masks. **ScoreResto
 system.**
 
 The repository currently implements the project scaffold, a small rights-cleared score-source
-corpus, exact semantic LilyPond mask rendering, and reusable pixel-aligned synthetic degradation.
-Dataset generation, model training, evaluation, and inference remain explicit CLI placeholders
-until their specified V1 milestones. No benchmark or quality claims are made at this stage.
+corpus, exact semantic LilyPond mask rendering, reusable pixel-aligned synthetic degradation, and
+materialized dataset generation with exact sample reproduction. Model training, evaluation, and
+inference remain explicit CLI placeholders until their specified V1 milestones. No benchmark or
+quality claims are made at this stage.
 
 Validate the bundled score sources, rights declarations, and SHA-256 hashes:
 
@@ -81,6 +82,66 @@ docker compose build
 docker compose run --rm scorerestore scorerestore degrade \
   /runs/input.png -o /runs/degraded.png \
   -c configs/degradation/medium.yaml --seed 1234
+```
+
+## Materialized datasets
+
+Milestone 4 assigns each underlying musical source to one deterministic
+train/validation/test/challenge split before rendering or degradation. Every layout and degraded
+variant of that source stays in the same split. Layout generation deterministically varies staff
+size, A4/Letter paper, portrait/landscape orientation, and modest margins; the exact values are
+recorded in each JSONL sample record.
+
+Generate and validate the two-sample native smoke dataset:
+
+```bash
+uv run scorerestore generate \
+  -c configs/dataset/smoke.yaml \
+  --output-root data/generated
+uv run scorerestore dataset validate \
+  data/generated/scorerestore-smoke-v1/manifests/samples.jsonl
+```
+
+Generation refuses to replace an existing dataset directory. Remove or choose a different output
+root deliberately before regenerating. The canonical `demo.yaml` targets 1,000 degraded page
+samples; `challenge.yaml` keeps a separate recoverable challenge set using the same five V1
+degradation families. These larger configurations are intentionally not part of the quick smoke
+command.
+
+Each dataset contains degraded inputs, pristine targets, four independent semantic masks, render
+and QA reports, per-sample degradation recipes, `manifests/samples.jsonl`, and resolved dataset
+metadata. Validate one sample by regenerating its source, layout, masks, and degradation:
+
+```bash
+uv run scorerestore dataset reproduce SAMPLE_ID \
+  --dataset-id scorerestore-smoke-v1 \
+  --data-root data/generated \
+  -o /tmp/reproduced.png
+```
+
+Matching LilyPond, ScoreRestore, Python, Pillow, and NumPy versions produce an exact hash check.
+Compatible version differences are reported as best-effort rather than silently presented as
+exact.
+
+The lightweight Python loader opens the degraded input and all five targets without introducing a
+training-framework dependency before the training milestones:
+
+```python
+from scorerestore.dataset import MaterializedDataset
+
+dataset = MaterializedDataset("data/generated/scorerestore-smoke-v1/manifests/samples.jsonl")
+sample = dataset[0]
+print(sample.image.size, sample.clean.size, sorted(sample.masks))
+```
+
+Docker Compose uses the same configs and writes through the `/data` mount:
+
+```bash
+docker compose build
+docker compose run --rm scorerestore scorerestore generate \
+  -c configs/dataset/smoke.yaml --output-root /data/generated
+docker compose run --rm scorerestore scorerestore dataset validate \
+  /data/generated/scorerestore-smoke-v1/manifests/samples.jsonl
 ```
 
 ## Native scaffold check

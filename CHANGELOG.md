@@ -15,6 +15,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   strict QA; environment inspection; unknown-grob diagnostics; and visual QA panels.
 - Reusable deterministic degradation API and CLI with exactly five pixel-aligned V1 corruption
   families, four composable presets, and complete JSON recipes.
+- Deterministic source-level dataset splits, seeded engraving/layout variation, materialized
+  inputs and five targets, strict JSONL manifests, stable sample IDs, dataset validation/loading,
+  and exact or best-effort sample reproduction.
+- Smoke, approximately 1,000-sample demo, and held-out challenge dataset configurations.
 
 ## [0.1.0] - 2026-08-11
 

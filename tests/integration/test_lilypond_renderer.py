@@ -12,6 +12,7 @@ from PIL import Image, ImageChops, ImageOps
 from scorerestore.cli import main
 from scorerestore.lilypond.constants import LILYPOND_VERSION
 from scorerestore.lilypond.renderer import (
+    LilyPondLayoutConfig,
     LilyPondRenderConfig,
     LilyPondRenderError,
     LilyPondRenderResult,
@@ -146,6 +147,29 @@ def test_source_hash_mismatch_is_rejected(tmp_path: Path, lilypond_binary: Path)
             config=LilyPondRenderConfig(lilypond_binary=lilypond_binary, dpi=48),
             expected_source_sha256="0" * 64,
         )
+
+
+def test_seeded_layout_parameters_change_page_geometry_and_are_recorded(
+    tmp_path: Path, lilypond_binary: Path
+) -> None:
+    layout = LilyPondLayoutConfig(
+        staff_size=24,
+        paper_format="letter",
+        orientation="landscape",
+        top_margin_mm=10,
+        bottom_margin_mm=11,
+        left_margin_mm=12,
+        right_margin_mm=13,
+    )
+    result = render_score(
+        FIXTURE,
+        tmp_path / "landscape",
+        config=LilyPondRenderConfig(lilypond_binary=lilypond_binary, dpi=48, layout=layout),
+    )
+
+    assert result.pages[0].width > result.pages[0].height
+    metadata = json.loads(result.metadata_path.read_text(encoding="utf-8"))
+    assert metadata["render_parameters"] == layout.to_dict()
 
 
 def test_inspect_commands_report_environment_and_generate_panel(
