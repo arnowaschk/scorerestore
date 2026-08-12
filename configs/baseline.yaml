@@ -1,0 +1,25 @@
+schema_version: 2
+illumination:
+  gaussian_sigma: 25.0
+  downsample_factor: 8
+threshold:
+  adaptive_block_size: 35
+  adaptive_c: 11.0
+morphology:
+  operation: open_close
+  kernel_size: 3
+  iterations: 1
+target_ink_threshold: 0.5
+variants:
+  - name: otsu
+    threshold_method: otsu
+    apply_morphology: false
+  - name: adaptive
+    threshold_method: adaptive
+    apply_morphology: false
+  - name: otsu_morphology
+    threshold_method: otsu
+    apply_morphology: true
+  - name: adaptive_morphology
+    threshold_method: adaptive
+    apply_morphology: true

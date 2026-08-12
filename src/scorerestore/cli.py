@@ -13,6 +13,9 @@ from pathlib import Path
 from PIL import Image, UnidentifiedImageError
 
 from scorerestore import __version__
+from scorerestore.baselines import evaluate_baseline, load_baseline_config
+from scorerestore.baselines.config import BaselineConfigError
+from scorerestore.baselines.evaluation import BaselineEvaluationError
 from scorerestore.dataset import (
     DatasetManifestError,
     generate_dataset,
@@ -64,10 +67,31 @@ def build_parser() -> argparse.ArgumentParser:
         ("train", "Train a ScoreRestore model (Milestone 6)"),
         ("evaluate", "Evaluate a model and create reports (Milestone 9)"),
         ("infer", "Restore and segment input pages (Milestone 8)"),
-        ("baseline", "Run the classical computer-vision baseline (Milestone 5)"),
     ):
         command_parser = commands.add_parser(name, help=help_text, description=help_text)
         command_parser.set_defaults(command_path=name)
+
+    baseline = commands.add_parser(
+        "baseline", help="Run and evaluate the classical computer-vision cleaning baseline"
+    )
+    baseline.add_argument("manifest", type=Path, help="materialized dataset JSONL manifest")
+    baseline.add_argument("-c", "--config", type=Path, required=True)
+    baseline.add_argument("-o", "--output", type=Path, required=True)
+    baseline.add_argument(
+        "--split",
+        action="append",
+        choices=("train", "validation", "test", "challenge"),
+        help="evaluate only this split; repeat for multiple splits",
+    )
+    baseline.add_argument(
+        "--set",
+        dest="overrides",
+        action="append",
+        default=[],
+        metavar="FIELD=VALUE",
+        help="override a YAML field using dotted paths; repeat as needed",
+    )
+    baseline.set_defaults(command_path="baseline", handler=_run_baseline)
 
     generation = commands.add_parser("generate", help="Generate a materialized synthetic dataset")
     generation.add_argument("-c", "--config", type=Path, required=True)
@@ -403,5 +427,26 @@ def _validate_dataset(args: argparse.Namespace) -> int:
     print(
         f"Validated {len(report.records)} sample(s) from {len(report.source_splits)} "
         f"source(s) in {report.manifest_path}."
+    )
+    return 0
+
+
+def _run_baseline(args: argparse.Namespace) -> int:
+    try:
+        config = load_baseline_config(args.config, overrides=args.overrides)
+        result = evaluate_baseline(
+            args.manifest,
+            args.output,
+            config=config,
+            splits=tuple(args.split) if args.split else None,
+        )
+    except (BaselineConfigError, BaselineEvaluationError, DatasetManifestError, OSError) as error:
+        print(f"Baseline evaluation failed: {error}", file=sys.stderr)
+        return 1
+    counts = ", ".join(f"{split}={count}" for split, count in result.split_counts.items())
+    print(
+        f"Processed {result.sample_count} sample(s) through {len(result.variant_names)} "
+        f"classical variants ({result.result_count} result(s)); "
+        f"splits: {counts}; results: {result.output_directory}; summary: {result.summary_path}"
     )
     return 0

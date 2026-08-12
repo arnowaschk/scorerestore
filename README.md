@@ -9,8 +9,9 @@ system.**
 The repository currently implements the project scaffold, a small rights-cleared score-source
 corpus, exact semantic LilyPond mask rendering, reusable pixel-aligned synthetic degradation, and
 materialized dataset generation with exact sample reproduction. Model training, evaluation, and
-inference remain explicit CLI placeholders until their specified V1 milestones. No benchmark or
-quality claims are made at this stage.
+inference remain explicit CLI placeholders until their specified V1 milestones; a measured
+classical cleaning baseline is available now. No neural benchmark or quality claims are made at
+this stage.
 
 Validate the bundled score sources, rights declarations, and SHA-256 hashes:
 
@@ -143,6 +144,60 @@ docker compose run --rm scorerestore scorerestore generate \
 docker compose run --rm scorerestore scorerestore dataset validate \
   /data/generated/scorerestore-smoke-v1/manifests/samples.jsonl
 ```
+
+## Classical cleaning baseline
+
+Milestone 5 provides a deliberately understandable, non-deep-learning reference pipeline:
+
+```text
+grayscale → smooth illumination estimate → normalization → Otsu/adaptive threshold
+          → optional light morphology → binary cleaned PNG
+```
+
+Every run evaluates the same samples with four fixed variants: Otsu, adaptive thresholding, Otsu
+plus morphology, and adaptive thresholding plus the same morphology. The shared defaults are a
+fixed, untuned starting point and were not adjusted using test results. The default light
+morphology is a 3x3 open-then-close cleanup with one iteration per operation; bounded `open`,
+`close`, or `open_close` remains configurable through strict YAML.
+
+Run the baseline over a generated smoke dataset:
+
+```bash
+uv run scorerestore baseline \
+  data/generated/scorerestore-smoke-v1/manifests/samples.jsonl \
+  -c configs/baseline.yaml \
+  -o runs/baseline-smoke
+```
+
+Configuration remains YAML-first. Repeat `--set FIELD=VALUE` for explicit overrides:
+
+```bash
+uv run scorerestore baseline \
+  data/generated/scorerestore-smoke-v1/manifests/samples.jsonl \
+  -c configs/baseline.yaml \
+  -o runs/baseline-open \
+  --set morphology.operation=open
+```
+
+Each run saves four binary cleaned PNGs per sample under `results/<variant>/<split>/`, plus resolved
+`config.yaml`, `environment.json`, variant-labelled per-result `metrics.jsonl` and `metrics.csv`,
+and a per-variant `summary.json`. Cleaning evaluation reports foreground precision, recall,
+F1/Dice, IoU, and scale-adaptive SSIM. Overall pixel accuracy is deliberately omitted because
+white page background would dominate it. Split summaries remain separate, especially challenge
+versus test.
+
+Docker Compose uses the same interface and writes results through `/runs`:
+
+```bash
+docker compose run --rm scorerestore scorerestore baseline \
+  /data/generated/scorerestore-smoke-v1/manifests/samples.jsonl \
+  -c configs/baseline.yaml \
+  -o /runs/baseline-smoke
+```
+
+The command computes real metrics for the selected dataset; this README intentionally does not
+publish a benchmark table before neural results exist and the later controlled evaluation milestone
+has been run.
 
 ## Native scaffold check
 

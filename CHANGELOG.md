@@ -19,6 +19,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   inputs and five targets, strict JSONL manifests, stable sample IDs, dataset validation/loading,
   and exact or best-effort sample reproduction.
 - Smoke, approximately 1,000-sample demo, and held-out challenge dataset configurations.
+- Readable OpenCV classical cleaning comparison with shared illumination normalization, four fixed
+  Otsu/adaptive variants with and without light morphology, foreground cleaning metrics, SSIM, and
+  variant-labelled materialized results.
 
 ## [0.1.0] - 2026-08-11
 

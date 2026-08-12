@@ -11,6 +11,7 @@ ScoreRestore does not distribute a prebuilt container image at this milestone.
 | uv | 0.11.20 | Apache-2.0 OR MIT | Locked dependency installation | https://github.com/astral-sh/uv | Copied from the versioned official uv container image during build. |
 | LilyPond | 2.26.0 | GPL-3.0-or-later | Score engraving and semantic render passes | https://gitlab.com/lilypond/lilypond/-/releases/v2.26.0 | Docker builds download and checksum the official binary. Audit GPL source/notice obligations before distributing a prebuilt ScoreRestore image. |
 | NumPy | 2.4.6 (Python 3.11), 2.5.2 (Python 3.12) | BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0 | Deterministic numerical image degradation | https://numpy.org/ | Runtime Python dependency; license expression and exact platform resolutions are recorded in installed metadata and `uv.lock`. |
+| opencv-python-headless / OpenCV | 4.14.0.94 | MIT wrapper; Apache-2.0 OpenCV; bundled third-party notices apply | Classical illumination normalization, thresholding, morphology, and SSIM | https://pypi.org/project/opencv-python-headless/ | Headless wheel avoids GUI dependencies. Wheels include separately licensed binaries such as LGPL-2.1 FFmpeg; inspect the wheel's `LICENSE-3RD-PARTY.txt` before redistribution. Exact resolution is in `uv.lock`. |
 | Pillow | 12.3.0 | MIT-CMU | Rendering-mask processing, QA panels, and image degradation | https://python-pillow.org/ | Runtime Python dependency; exact resolution is in `uv.lock`. |
 | PyYAML | 6.0.3 | MIT | YAML configuration parsing | https://pyyaml.org/ | Runtime Python dependency; exact resolution is in `uv.lock`. |
 | Hatchling | 1.27.0 | MIT | Python package build backend | https://github.com/pypa/hatch | Build-time Python dependency pinned in `pyproject.toml`. |
@@ -29,4 +30,4 @@ Their exact source URLs, SHA-256 hashes, composition rights, and source-file rig
 | Beethoven, Für Elise LilyPond source | WoO 59; Mutopia-2015/08/18-931 | Public Domain | Score-source starter asset | https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=931 | Composition, 1888 source edition, and contributor typesetting are identified as Public Domain. |
 | Foster, Hard Times Come Again No More LilyPond source | Mutopia-2014/03/24-371 | Public Domain | Voice/lyrics score-source starter asset | https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=371 | Composition, source edition, and contributor typesetting are identified as Public Domain. |
 
-No generated datasets or model weights are distributed in Milestone 1.
+No generated datasets or model weights are committed or distributed with the repository.

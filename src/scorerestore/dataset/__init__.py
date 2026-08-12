@@ -7,7 +7,11 @@ from scorerestore.dataset.generation import (
     generate_dataset,
     reproduce_sample,
 )
-from scorerestore.dataset.loader import MaterializedDataset, MaterializedSample
+from scorerestore.dataset.loader import (
+    MaterializedCleaningSample,
+    MaterializedDataset,
+    MaterializedSample,
+)
 from scorerestore.dataset.manifest import DatasetManifestError, validate_dataset_manifest
 from scorerestore.dataset.sources import CuratedLilyPondDatasetSource, assign_source_splits
 
@@ -16,6 +20,7 @@ __all__ = [
     "DatasetGenerationConfig",
     "DatasetGenerationResult",
     "DatasetManifestError",
+    "MaterializedCleaningSample",
     "MaterializedDataset",
     "MaterializedSample",
     "ReproductionResult",

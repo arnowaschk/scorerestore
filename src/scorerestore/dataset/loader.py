@@ -22,6 +22,15 @@ class MaterializedSample:
     record: dict[str, Any]
 
 
+@dataclass(frozen=True, slots=True)
+class MaterializedCleaningSample:
+    """One degraded input and pristine cleaning target without segmentation-mask I/O."""
+
+    image: Image.Image
+    clean: Image.Image
+    record: dict[str, Any]
+
+
 class MaterializedDataset(Sequence[MaterializedSample]):
     """Sequence-style V1 loader; a later milestone may adapt it to PyTorch Dataset."""
 
@@ -46,14 +55,31 @@ class MaterializedDataset(Sequence[MaterializedSample]):
         for record in self._records:
             yield self._load(record)
 
+    def iter_cleaning(self) -> Iterator[MaterializedCleaningSample]:
+        """Load only input/clean pairs for cleaning-only consumers such as the baseline."""
+
+        for record in self._records:
+            yield self._load_cleaning(record)
+
     def _load(self, record: dict[str, Any]) -> MaterializedSample:
-        image = _open_copy(self.dataset_root / record["input_path"])
-        clean = _open_copy(self.dataset_root / record["clean_target_path"])
+        cleaning = self._load_cleaning(record)
         masks = {
             name: _open_copy(self.dataset_root / path)
             for name, path in record["mask_paths"].items()
         }
-        return MaterializedSample(image=image, clean=clean, masks=masks, record=record)
+        return MaterializedSample(
+            image=cleaning.image,
+            clean=cleaning.clean,
+            masks=masks,
+            record=record,
+        )
+
+    def _load_cleaning(self, record: dict[str, Any]) -> MaterializedCleaningSample:
+        return MaterializedCleaningSample(
+            image=_open_copy(self.dataset_root / record["input_path"]),
+            clean=_open_copy(self.dataset_root / record["clean_target_path"]),
+            record=record,
+        )
 
 
 def _open_copy(path: Path) -> Image.Image:

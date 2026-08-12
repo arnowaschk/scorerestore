@@ -14,3 +14,9 @@ The `dataset/` directory contains materialized generation presets:
 Dataset configuration controls the deterministic source split, layout grid, margin range, target
 sample count, mask rendering, and degradation preset selection. Training and benchmark
 configurations will be added only with the milestones that consume them.
+
+`baseline.yaml` configures the fixed four-variant classical comparison: shared smooth
+illumination-field estimation, Otsu and adaptive threshold parameters, one bounded light
+morphology, and the pristine-target ink threshold. Every run covers thresholding with and without
+that morphology on identical samples. CLI overrides use repeatable dotted assignments such as
+`--set morphology.operation=open`.

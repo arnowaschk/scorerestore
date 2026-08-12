@@ -20,6 +20,7 @@ classifiers = [
 ]
 dependencies = [
   "numpy>=2.2,<3",
+  "opencv-python-headless>=4.13.0.92,<5",
   "Pillow>=11.3,<13",
   "PyYAML>=6.0.2,<7",
 ]

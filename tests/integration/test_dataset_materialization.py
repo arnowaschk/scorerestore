@@ -73,6 +73,9 @@ def test_materialize_validate_load_and_exactly_reproduce_smoke_dataset(
     assert set(sample.masks) == {"background", "staff", "notation", "text"}
     assert all(mask.size == sample.clean.size for mask in sample.masks.values())
     assert sample.image.tobytes() != sample.clean.tobytes()
+    cleaning_sample = next(dataset.iter_cleaning())
+    assert cleaning_sample.image.size == cleaning_sample.clean.size
+    assert cleaning_sample.record["sample_id"] == sample.record["sample_id"]
 
     reproduced_path = tmp_path / "reproduced.png"
     sample_id = report.records[0]["sample_id"]

@@ -18,10 +18,12 @@ def test_smoke_config_is_small_and_source_limited() -> None:
     assert config.dpi == 48
 
 
-def test_demo_config_defines_approximately_one_thousand_and_all_layout_axes() -> None:
+def test_demo_config_defines_temporary_sample_count_and_all_layout_axes() -> None:
     config = load_dataset_config(PROJECT_ROOT / "configs/dataset/demo.yaml")
 
-    assert config.target_samples == 1000
+    # Temporary local runtime reduction requested by the project owner. Restore this assertion to
+    # 1000 together with configs/dataset/demo.yaml when the canonical demonstration size returns.
+    assert config.target_samples == 200
     assert config.layout.staff_sizes == (12.0, 16.0, 20.0, 24.0)
     assert set(config.layout.paper_formats) == {"a4", "letter"}
     assert set(config.layout.orientations) == {"portrait", "landscape"}
