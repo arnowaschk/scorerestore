@@ -19,6 +19,7 @@ def test_root_help_lists_public_v1_commands(capsys: pytest.CaptureFixture[str]) 
         "generate",
         "train",
         "evaluate",
+        "compare-real-world",
         "infer",
         "baseline",
         "dataset",
@@ -52,9 +53,23 @@ def test_infer_exposes_tiled_inference_options(capsys: pytest.CaptureFixture[str
     assert "tiled inference" in capsys.readouterr().out
 
 
-def test_later_milestone_command_fails_explicitly(capsys: pytest.CaptureFixture[str]) -> None:
-    assert main(["evaluate"]) == 2
-    assert "reserved for a later" in capsys.readouterr().err
+def test_evaluation_commands_expose_their_public_interfaces(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exit_info:
+        main(["evaluate", "--help"])
+    assert exit_info.value.code == 0
+    assert "visual comparison reports" in capsys.readouterr().out
+
+    with pytest.raises(SystemExit) as exit_info:
+        main(["benchmark", "--help"])
+    assert exit_info.value.code == 0
+    assert "tiled inference runtime" in capsys.readouterr().out
+
+    with pytest.raises(SystemExit) as exit_info:
+        main(["compare-real-world", "--help"])
+    assert exit_info.value.code == 0
+    assert "full-resolution" in capsys.readouterr().out
 
 
 def test_dataset_reproduce_requires_sample_id() -> None:

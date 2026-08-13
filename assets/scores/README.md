@@ -20,6 +20,13 @@ Validate all bundled sources from the repository root:
 uv run scorerestore inspect provenance
 ```
 
+## Real-world demonstration PDFs
+
+`real_world/` contains practical, unannotated score examples used only for visual inference
+demonstrations. They are outside the generated training corpus and have no clean or semantic target
+annotations, so they MUST NOT be used for V1 training, validation, test, challenge, or quantitative
+evaluation. Use `scorerestore compare-real-world` to create a side-by-side visual comparison.
+
 Do not edit or replace a source without reviewing its rights again and updating its hash, source
 URL, verification date, and notes. Milestone 2 renders sources through a converted temporary copy;
 the rights-cleared source bytes in this directory remain unchanged.

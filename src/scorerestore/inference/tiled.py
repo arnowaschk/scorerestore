@@ -99,12 +99,13 @@ def load_checkpoint_model(
     state = checkpoint.get("model_state_dict") if isinstance(checkpoint, dict) else None
     if not isinstance(config, dict) or not isinstance(state, dict):
         raise ValueError("checkpoint must contain config and model_state_dict")
+    model_config = _model_config(config)
     try:
         model = build_model(
-            config["model_backend"],
-            base_channels=config["base_channels"],
-            pretrained=config["pretrained"],
-            freeze_batch_norm=config["freeze_batch_norm"],
+            model_config["model_backend"],
+            base_channels=model_config["base_channels"],
+            pretrained=model_config["pretrained"],
+            freeze_batch_norm=model_config["freeze_batch_norm"],
         )
         model.load_state_dict(state)
     except (KeyError, RuntimeError, ValueError) as error:
@@ -114,12 +115,29 @@ def load_checkpoint_model(
         "checkpoint": str(Path(path).resolve()),
         "checkpoint_epoch": checkpoint.get("epoch"),
         "checkpoint_validation_loss": checkpoint.get("validation_loss"),
+        "training_config": model_config,
         "model": model_provenance(model),
         "scorerestore_version": __version__,
         "torch_version": torch.__version__,
         "torchvision_version": torchvision.__version__,
         "python_version": platform.python_version(),
     }
+
+
+def _model_config(config: dict[str, Any]) -> dict[str, Any]:
+    """Normalize the original custom-U-Net checkpoint shape emitted before Milestone 7.
+
+    Those checkpoints did not need transfer-learning fields.  Missing fields therefore have only
+    the original V1 custom-U-Net defaults; explicit checkpoint values always take precedence.
+    """
+
+    resolved = dict(config)
+    resolved.setdefault("model_backend", "unet")
+    resolved.setdefault("pretrained", False)
+    resolved.setdefault("freeze_batch_norm", True)
+    if "base_channels" not in resolved:
+        raise ValueError("checkpoint config is missing base_channels")
+    return resolved
 
 
 def _predict_tiled(

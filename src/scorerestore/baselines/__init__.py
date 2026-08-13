@@ -13,7 +13,7 @@ from scorerestore.baselines.config import (
     load_baseline_config,
 )
 from scorerestore.baselines.evaluation import BaselineEvaluationResult, evaluate_baseline
-from scorerestore.baselines.metrics import CleaningMetrics, cleaning_metrics
+from scorerestore.baselines.metrics import CleaningMetrics, cleaning_metrics, restoration_ssim
 
 __all__ = [
     "BASELINE_VARIANTS",
@@ -28,4 +28,5 @@ __all__ = [
     "cleaning_metrics",
     "evaluate_baseline",
     "load_baseline_config",
+    "restoration_ssim",
 ]

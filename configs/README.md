@@ -22,8 +22,7 @@ The `training/` directory contains custom U-Net and transfer-learning configurat
 - `resnet18.yaml`: the comparable ImageNet-pretrained ResNet-18 transfer-learning run.
 
 `short.yaml` is useful for validating an end-to-end training setup, but five epochs are not a
-quality benchmark. Benchmark configurations will be added only with the milestones that consume
-them.
+quality benchmark.
 
 The `inference/default.yaml` file configures a checkpoint, device selection, tile size/overlap,
 binary cleaning and semantic thresholds, PDF rasterization DPI, and optional overlay output. Its
@@ -34,3 +33,16 @@ illumination-field estimation, Otsu and adaptive threshold parameters, one bound
 morphology, and the pristine-target ink threshold. Every run covers thresholding with and without
 that morphology on identical samples. CLI overrides use repeatable dotted assignments such as
 `--set morphology.operation=open`.
+
+`evaluation.yaml` is the canonical Milestone 9 measured-report template. It names the materialized
+manifest and checkpoints for cleaning-only U-Net, multitask U-Net, and pretrained ResNet-18 runs;
+sets separate validation/test/challenge evaluation; selects the OpenCV comparison variant; and sets
+tiled inference, PDF DPI, and seeded visual-report options. It deliberately records no benchmark
+numbers: `scorerestore benchmark` writes only actual measurements to its requested JSON output.
+
+`real_world/default.yaml` configures the unannotated visual-comparison command. Its ordered
+`models` list defines every neural panel after Original and the configured classical baseline. A
+model checkpoint may be `auto` (lowest saved validation loss for its declared backend under
+`runs_root`) or an explicit `runs/training-demoX/checkpoints/best.pt` path. Copy this YAML to place
+any number of training runs side by side; their labels, ordering, and exact selections are recorded
+in the generated metadata.

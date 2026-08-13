@@ -77,10 +77,7 @@ def cleaning_metrics(
         f1=dice,
         dice=dice,
         iou=iou,
-        ssim=_ssim(
-            np.asarray(predicted_clean.convert("L"), dtype=np.uint8),
-            target_intensity,
-        ),
+        ssim=restoration_ssim(predicted_clean, target_clean),
     )
 
 
@@ -113,6 +110,17 @@ def metrics_from_counts(
 
 def _ratio(numerator: int, denominator: int) -> float:
     return 1.0 if denominator == 0 else numerator / denominator
+
+
+def restoration_ssim(predicted: Image.Image, target: Image.Image) -> float:
+    """Measure grayscale structural similarity without applying a binary threshold."""
+
+    if predicted.size != target.size:
+        raise ValueError("predicted and target dimensions must match")
+    return _ssim(
+        np.asarray(predicted.convert("L"), dtype=np.uint8),
+        np.asarray(target.convert("L"), dtype=np.uint8),
+    )
 
 
 def _ssim(first: np.ndarray, second: np.ndarray) -> float:

@@ -1,0 +1,22 @@
+# Default four-panel real-world showcase. Add explicit training-demoX checkpoints to models below.
+input_root: assets/scores/real_world
+runs_root: runs
+inference:
+  device: auto
+  tile_size: 1024
+  overlap: 128
+  pdf_dpi: 300
+  cleaning_threshold: 0.5
+  segmentation_threshold: 0.5
+classical:
+  config: configs/baseline.yaml
+  variant: otsu
+models:
+  - id: resnet_cleaned
+    label: ResNet-18 cleaned
+    backend: resnet18
+    checkpoint: auto
+  - id: model_cleaned
+    label: Custom model cleaned
+    backend: unet
+    checkpoint: auto

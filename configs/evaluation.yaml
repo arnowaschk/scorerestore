@@ -1,0 +1,23 @@
+# Controlled evaluation template: use matched data/split/budget settings for all checkpoint runs.
+dataset_manifest: data/generated/scorerestore-demo-v1/manifests/samples.jsonl
+models:
+  - name: clean_unet
+    checkpoint: runs/training-clean/checkpoints/best.pt
+  - name: multitask_unet
+    checkpoint: runs/training-demo/checkpoints/best.pt
+  - name: pretrained_resnet18
+    checkpoint: runs/training-resnet18/checkpoints/best.pt
+splits: [validation, test, challenge]
+inference:
+  device: auto
+  tile_size: 1024
+  overlap: 128
+  pdf_dpi: 300
+  cleaning_threshold: 0.5
+  segmentation_threshold: 0.5
+baseline:
+  config: configs/baseline.yaml
+  variant: otsu
+report:
+  seed: 20260813
+  samples: 8

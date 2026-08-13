@@ -24,6 +24,13 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   variant-labelled materialized results.
 - Tiled bounded-memory inference for raster, multipage TIFF, and PDF inputs; binary cleaning,
   semantic masks/probabilities, overlays, per-page metadata, and a stable `scorerestore.clean()` API.
+- Measured checkpoint evaluation and benchmark commands with machine-readable CSV/JSON metrics,
+  separate validation/test/challenge summaries, deterministic five-panel visual comparison sheets,
+  controlled U-Net/multitask and U-Net/ResNet-18 comparison provenance, and actual-only runtime
+  records.
+- Real-world PDF comparison command with automatic local custom-U-Net/ResNet-18 checkpoint
+  selection, checkpoint-selection provenance, native-resolution cleaned PNG outputs, and YAML
+  configurable, ordered original/classical/neural landscape panels per input page.
 
 ## [0.1.0] - 2026-08-11
 

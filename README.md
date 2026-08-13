@@ -6,12 +6,10 @@ ScoreRestore V1 is a proof-of-concept project for cleaning degraded sheet-music 
 predicting independent background, staff, notation, and text masks. **ScoreRestore is not an OMR
 system.**
 
-The repository currently implements the project scaffold, a small rights-cleared score-source
-corpus, exact semantic LilyPond mask rendering, reusable pixel-aligned synthetic degradation, and
-materialized dataset generation with exact sample reproduction. Model training, evaluation, and
-inference remain explicit CLI placeholders until their specified V1 milestones; a measured
-classical cleaning baseline is available now. No neural benchmark or quality claims are made at
-this stage.
+The repository implements a small rights-cleared score-source corpus, exact semantic LilyPond mask
+rendering, reusable pixel-aligned synthetic degradation, materialized dataset generation with exact
+sample reproduction, neural training, tiled inference, and measured evaluation reports. No quality
+or performance claim is made unless it is backed by a generated report labelled **MEASURED**.
 
 Validate the bundled score sources, rights declarations, and SHA-256 hashes:
 
@@ -195,9 +193,9 @@ docker compose run --rm scorerestore scorerestore baseline \
   -o /runs/baseline-smoke
 ```
 
-The command computes real metrics for the selected dataset; this README intentionally does not
-publish a benchmark table before neural results exist and the later controlled evaluation milestone
-has been run.
+The command computes real metrics for the selected dataset. Neural and baseline comparisons are
+produced by the measured evaluation workflow below rather than copied into this README as an
+unverified static table.
 
 ## Custom U-Net training
 
@@ -245,8 +243,8 @@ BatchNorm policy, architecture, and parameter count in `environment.json`. The w
 first use; ScoreRestore does not redistribute them.
 
 Use the same dataset, task, split, crop, seed, and training settings as `default.yaml` when
-comparing the custom U-Net and ResNet-18. A later evaluation milestone will generate formal metric
-reports; this milestone only makes a controlled comparison run possible.
+comparing the custom U-Net and ResNet-18. The measured evaluation workflow below records the actual
+comparison; pretrained natural-image features are not assumed to win.
 
 ## Tiled inference
 
@@ -285,9 +283,9 @@ epoch/phase, batch count and percentage, running loss, elapsed time, ETA, and en
 Docker Compose mounts `./data` at both `/data` and the repository-relative `/app/data`, so the
 default training configuration works unchanged in the container.
 
-`data/real_world/` is the canonical local location for unannotated real-score examples. They are
-useful for practical visual demonstrations, but are never V1 training, validation, or quantitative
-evaluation data because they have no ground truth.
+`assets/scores/real_world/` is the canonical local location for unannotated real-score examples.
+They are useful for practical visual demonstrations, but are never V1 training, validation, or
+quantitative evaluation data because they have no ground truth.
 
 The Compose service reserves a 1 GiB RAM-backed `/dev/shm` area for PyTorch DataLoader workers.
 This is distinct from free disk space: Docker otherwise defaults to just 64 MiB of shared memory,
@@ -299,6 +297,102 @@ docker compose run --rm scorerestore scorerestore train \
   -c configs/training/default.yaml -o /runs/training-demo \
   --set training.num_workers=0
 ```
+
+## Measured evaluation and benchmark reports
+
+Milestone 9 evaluates named checkpoints using `configs/evaluation.yaml`. Its canonical three-model
+template covers a cleaning-only custom U-Net, a multitask custom U-Net, and a pretrained ResNet-18
+encoder model. For a controlled comparison, train the selected candidates with the same dataset
+manifest, source-isolated split, budget, seed, and major hyperparameters. The generated summary
+marks whether checkpoint provenance satisfies those comparability checks; it does not claim a
+winner.
+
+```bash
+uv run scorerestore evaluate \
+  -c configs/evaluation.yaml \
+  -o runs/evaluation-demo
+```
+
+The command refuses to overwrite an existing output directory and writes `metrics.jsonl`,
+`metrics.csv`, `summary.json`, and `report/summary.md`. It reports thresholded cleaning precision,
+recall, F1/Dice, IoU, and continuous SSIM; per-class segmentation precision, recall, Dice, and IoU;
+macro and foreground-only macro segmentation metrics; plus `all_false_rate` and
+`background_overlap_rate`. It deliberately omits overall pixel accuracy. The selected OpenCV
+variant is measured alongside neural cleaning output, but has no invented segmentation metrics.
+
+Validation, test, and challenge are separate report sections; challenge is never folded into test.
+The report also produces seeded, deterministic five-panel sheets:
+
+```text
+degraded | OpenCV baseline | DL cleaned | pristine target | segmentation overlay
+```
+
+Use `report.seed` and `report.samples` in the evaluation configuration to regenerate the same
+visual selection. A report is a measurement of the listed checkpoints and dataset manifest, not a
+general quality claim; repeated-seed comparisons require separate runs.
+
+Measure actual tiled inference on a named checkpoint without estimating values:
+
+```bash
+uv run scorerestore benchmark input.pdf \
+  -c configs/evaluation.yaml \
+  -o runs/benchmark-demo.json \
+  --model multitask_unet
+```
+
+The resulting JSON is labelled **MEASURED** and records hardware, tile size, overlap, precision
+mode, PDF DPI, page dimensions, per-page and total latency, megapixels/second, and CUDA peak memory
+when it is measurable. No benchmark table is published here because the project has not committed a
+specific measured hardware run.
+
+## Real-world visual comparison
+
+Run the default four-panel comparison on every PDF in `assets/scores/real_world/`:
+
+```bash
+uv run scorerestore compare-real-world \
+  -c configs/real_world/default.yaml \
+  -o runs/real-world-comparison
+```
+
+The YAML configuration specifies the real-world input folder, tiled inference settings, classical
+OpenCV variant, and the ordered neural `models` panels. The default discovers the eligible
+ResNet-18 and custom U-Net checkpoints with the lowest saved training validation losses. This is a
+deterministic local selection heuristic, not a cross-dataset quality claim; the chosen checkpoints
+and losses are recorded in `metadata.json`.
+
+Create another YAML file to compare multiple explicit training runs side by side:
+
+```yaml
+# configs/real_world/demo-comparison.yaml
+input_root: assets/scores/real_world
+runs_root: runs
+inference: {device: auto, tile_size: 1024, overlap: 128, pdf_dpi: 300,
+            cleaning_threshold: 0.5, segmentation_threshold: 0.5}
+classical: {config: configs/baseline.yaml, variant: otsu}
+models:
+  - {id: resnet_cleaned, label: ResNet-18 cleaned, backend: resnet18, checkpoint: auto}
+  - {id: demo_1, label: Training demo 1, backend: unet,
+     checkpoint: runs/training-demo/checkpoints/best.pt}
+  - {id: demo_2, label: Training demo 2, backend: unet,
+     checkpoint: runs/training-demo2/checkpoints/best.pt}
+```
+
+The panels follow the `models` list exactly after Original and the classical result. Use a temporary
+command-line checkpoint override without changing YAML when useful:
+
+```bash
+uv run scorerestore compare-real-world \
+  -o runs/real-world-comparison \
+  -c configs/real_world/demo-comparison.yaml \
+  --checkpoint demo_2=runs/training-demo2/checkpoints/best.pt
+```
+
+It saves original, `classical_cleaned`, `resnet_cleaned`, and `model_cleaned` PNG pages and one
+`comparison.pdf`; each configured model additionally has its own directory named after its `id`.
+Every PDF page becomes one landscape page with exact native-resolution raster panels. No page is
+downscaled for the comparison PDF. All reusable settings—including the classical variant, DPI, and
+tile settings—belong in YAML.
 
 ## Native scaffold check
 

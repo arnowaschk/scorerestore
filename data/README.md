@@ -5,9 +5,6 @@ default. Each dataset includes degraded inputs, pristine targets, background/sta
 masks, JSONL manifests, recipes, and QA/render reports. Generated contents are intentionally
 ignored by Git; this documentation file is the only tracked exception.
 
-## Real-world examples
-
-`data/real_world/` is the canonical local location for unannotated example score pages. These
-files are practical demonstration inputs only: they MUST NOT be used as V1 training targets,
-validation data, or quantitative evaluation data because no clean or semantic annotations exist.
-They are intentionally ignored by Git along with other local data.
+Real-world demonstration PDFs are kept separately in `assets/scores/real_world/`. They have no
+clean or semantic annotations and therefore MUST NOT be used as V1 training targets, validation
+data, or quantitative evaluation data.

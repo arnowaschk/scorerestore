@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from scorerestore.baselines import cleaning_metrics
+from scorerestore.baselines import cleaning_metrics, restoration_ssim
 
 
 def test_cleaning_metrics_use_black_as_foreground_and_omit_accuracy() -> None:
@@ -35,3 +35,10 @@ def test_identical_cleaning_images_have_perfect_scores() -> None:
 def test_cleaning_metrics_reject_dimension_mismatch() -> None:
     with pytest.raises(ValueError, match="dimensions must match"):
         cleaning_metrics(Image.new("L", (2, 2)), Image.new("L", (3, 2)))
+
+
+def test_restoration_ssim_uses_continuous_grayscale_values() -> None:
+    target = Image.fromarray(np.array([[0, 255], [255, 0]], dtype=np.uint8))
+    continuous = Image.fromarray(np.array([[20, 220], [230, 15]], dtype=np.uint8))
+
+    assert restoration_ssim(continuous, target) < 1.0

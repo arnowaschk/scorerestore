@@ -31,12 +31,22 @@ from scorerestore.degradation import (
     degrade,
     recipe_json,
 )
+from scorerestore.evaluation import (
+    EvaluationConfigError,
+    benchmark,
+    evaluate,
+    load_evaluation_config,
+)
 from scorerestore.inference import (
     InferenceConfigError,
     InputReadError,
+    RealWorldComparisonConfigError,
+    RealWorldComparisonError,
     clean,
+    compare_real_world,
     load_checkpoint_model,
     load_inference_config,
+    load_real_world_comparison_config,
     read_input_pages,
     write_page_outputs,
     write_run_metadata,
@@ -74,9 +84,33 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
 
     commands = parser.add_subparsers(dest="command", metavar="COMMAND", required=True)
-    for name, help_text in (("evaluate", "Evaluate a model and create reports (Milestone 9)"),):
-        command_parser = commands.add_parser(name, help=help_text, description=help_text)
-        command_parser.set_defaults(command_path=name)
+    evaluation = commands.add_parser(
+        "evaluate",
+        help="Measure checkpoints and generate visual comparison reports",
+        description="Measure checkpoints and generate visual comparison reports.",
+    )
+    evaluation.add_argument("-c", "--config", type=Path, required=True)
+    evaluation.add_argument("-o", "--output", type=Path, required=True)
+    evaluation.add_argument(
+        "--set", dest="overrides", action="append", default=[], metavar="FIELD=VALUE"
+    )
+    evaluation.set_defaults(command_path="evaluate", handler=_run_evaluation)
+
+    runtime_benchmark = commands.add_parser(
+        "benchmark",
+        help="Measure tiled inference runtime for a named evaluation model",
+        description="Measure tiled inference runtime for a named evaluation model.",
+    )
+    runtime_benchmark.add_argument("input", type=Path)
+    runtime_benchmark.add_argument("-c", "--config", type=Path, required=True)
+    runtime_benchmark.add_argument("-o", "--output", type=Path, required=True)
+    runtime_benchmark.add_argument(
+        "--model", required=True, help="named model from the evaluation config"
+    )
+    runtime_benchmark.add_argument(
+        "--set", dest="overrides", action="append", default=[], metavar="FIELD=VALUE"
+    )
+    runtime_benchmark.set_defaults(command_path="benchmark", handler=_run_benchmark)
 
     inference = commands.add_parser(
         "infer",
@@ -95,6 +129,46 @@ def build_parser() -> argparse.ArgumentParser:
         help="override a YAML field using dotted paths; repeat as needed",
     )
     inference.set_defaults(command_path="infer", handler=_run_inference)
+
+    real_world = commands.add_parser(
+        "compare-real-world",
+        help="Clean real-world PDFs with ResNet-18 and the selected custom U-Net",
+        description=(
+            "Create full-resolution original/classical/ResNet/custom-model landscape comparison "
+            "pages for unannotated real-world PDFs."
+        ),
+    )
+    real_world.add_argument(
+        "-o", "--output", type=Path, required=True, help="new comparison output directory"
+    )
+    real_world.add_argument(
+        "-c",
+        "--config",
+        type=Path,
+        default=Path("configs/real_world/default.yaml"),
+        help="comparison YAML (default: configs/real_world/default.yaml)",
+    )
+    real_world.add_argument(
+        "--set", dest="overrides", action="append", default=[], metavar="FIELD=VALUE"
+    )
+    real_world.add_argument(
+        "--checkpoint",
+        action="append",
+        default=[],
+        metavar="MODEL_ID=PATH",
+        help="override one configured model checkpoint; repeat for multiple models",
+    )
+    real_world.add_argument(
+        "--model-checkpoint",
+        type=Path,
+        help="legacy override for the default model_cleaned panel",
+    )
+    real_world.add_argument(
+        "--resnet-checkpoint",
+        type=Path,
+        help="override automatic ResNet-18 checkpoint selection",
+    )
+    real_world.set_defaults(command_path="compare-real-world", handler=_run_real_world_comparison)
 
     training = commands.add_parser(
         "train",
@@ -544,4 +618,67 @@ def _run_inference(args: argparse.Namespace) -> int:
         print(f"Inference failed: {error}", file=sys.stderr)
         return 1
     print(f"Processed {len(pages)} page(s); outputs: {output}")
+    return 0
+
+
+def _run_real_world_comparison(args: argparse.Namespace) -> int:
+    try:
+        config = load_real_world_comparison_config(args.config, overrides=tuple(args.overrides))
+        checkpoint_overrides = _checkpoint_overrides(args.checkpoint)
+        if args.model_checkpoint is not None:
+            checkpoint_overrides["model_cleaned"] = args.model_checkpoint
+        if args.resnet_checkpoint is not None:
+            checkpoint_overrides["resnet_cleaned"] = args.resnet_checkpoint
+        result = compare_real_world(
+            config,
+            args.output,
+            checkpoint_overrides=checkpoint_overrides,
+        )
+    except (
+        InputReadError,
+        RealWorldComparisonConfigError,
+        RealWorldComparisonError,
+        ValueError,
+        OSError,
+    ) as error:
+        print(f"Real-world comparison failed: {error}", file=sys.stderr)
+        return 1
+    print(
+        f"Compared {result.page_count} page(s) from {result.pdf_count} PDF(s); "
+        f"comparison PDF: {result.comparison_pdf}"
+    )
+    return 0
+
+
+def _checkpoint_overrides(raw: list[str]) -> dict[str, Path]:
+    result: dict[str, Path] = {}
+    for item in raw:
+        identifier, separator, path = item.partition("=")
+        if not separator or not identifier or not path:
+            raise RealWorldComparisonError("--checkpoint must use MODEL_ID=PATH")
+        if identifier in result:
+            raise RealWorldComparisonError(f"duplicate --checkpoint override for {identifier!r}")
+        result[identifier] = Path(path)
+    return result
+
+
+def _run_evaluation(args: argparse.Namespace) -> int:
+    try:
+        config = load_evaluation_config(args.config, overrides=tuple(args.overrides))
+        result = evaluate(config, args.output)
+    except (EvaluationConfigError, ValueError, OSError) as error:
+        print(f"Evaluation failed: {error}", file=sys.stderr)
+        return 1
+    print(f"Evaluated {result.sample_count} sample(s); summary: {result.summary_path}")
+    return 0
+
+
+def _run_benchmark(args: argparse.Namespace) -> int:
+    try:
+        config = load_evaluation_config(args.config, overrides=tuple(args.overrides))
+        output = benchmark(config, args.input, args.output, model_name=args.model)
+    except (EvaluationConfigError, ValueError, OSError) as error:
+        print(f"Benchmark failed: {error}", file=sys.stderr)
+        return 1
+    print(f"Measured benchmark written to {output}")
     return 0

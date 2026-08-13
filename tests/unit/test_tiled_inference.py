@@ -113,6 +113,27 @@ def test_checkpoint_model_round_trip(tmp_path: Path) -> None:
     assert result.cleaned.size == (64, 64)
 
 
+def test_original_custom_unet_checkpoint_without_transfer_fields_still_loads(
+    tmp_path: Path,
+) -> None:
+    original = build_model(base_channels=2)
+    checkpoint_path = tmp_path / "legacy-weights.pt"
+    torch.save(
+        {
+            "model_state_dict": original.state_dict(),
+            "config": {"base_channels": 2, "task": "multitask"},
+            "epoch": 1,
+            "validation_loss": 0.2,
+        },
+        checkpoint_path,
+    )
+
+    _, metadata = load_checkpoint_model(checkpoint_path, device="cpu")
+
+    assert metadata["training_config"]["model_backend"] == "unet"
+    assert metadata["training_config"]["pretrained"] is False
+
+
 def test_input_adapters_preserve_multipage_tiff_order_and_rasterize_pdf(tmp_path: Path) -> None:
     first, second = Image.new("L", (17, 11), 10), Image.new("L", (17, 11), 230)
     tiff = tmp_path / "pages.tiff"
