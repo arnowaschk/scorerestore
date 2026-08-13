@@ -3,7 +3,7 @@
 /.local/
 
 # Python environments, caches, and build outputs.
-/.venv/
+.venv
 /.tools/
 __pycache__/
 *.py[cod]

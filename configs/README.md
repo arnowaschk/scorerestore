@@ -12,8 +12,18 @@ The `dataset/` directory contains materialized generation presets:
 - `challenge.yaml`: a separate recoverable challenge dataset using held-out degradation patterns.
 
 Dataset configuration controls the deterministic source split, layout grid, margin range, target
-sample count, mask rendering, and degradation preset selection. Training and benchmark
-configurations will be added only with the milestones that consume them.
+sample count, mask rendering, and degradation preset selection.
+
+The `training/` directory contains custom U-Net and transfer-learning configurations:
+
+- `default.yaml`: the standard 50-epoch V1 demo training run;
+- `short.yaml`: the canonical five-epoch practical test run using the same defaults;
+- `smoke.yaml`: a tiny CPU forward/backward/checkpoint verification run.
+- `resnet18.yaml`: the comparable ImageNet-pretrained ResNet-18 transfer-learning run.
+
+`short.yaml` is useful for validating an end-to-end training setup, but five epochs are not a
+quality benchmark. Benchmark configurations will be added only with the milestones that consume
+them.
 
 `baseline.yaml` configures the fixed four-variant classical comparison: shared smooth
 illumination-field estimation, Otsu and adaptive threshold parameters, one bounded light

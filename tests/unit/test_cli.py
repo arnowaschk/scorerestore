@@ -36,8 +36,19 @@ def test_version_is_available(capsys: pytest.CaptureFixture[str]) -> None:
     assert capsys.readouterr().out == "scorerestore 0.1.0\n"
 
 
-def test_later_milestone_command_fails_explicitly(capsys: pytest.CaptureFixture[str]) -> None:
-    assert main(["train"]) == 2
+def test_train_exposes_neural_backend_options(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit) as exit_info:
+        main(["train", "--help"])
+
+    assert exit_info.value.code == 0
+    assert "custom U-Net or transfer-learning backend" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("command", ["evaluate", "infer"])
+def test_later_milestone_command_fails_explicitly(
+    command: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert main([command]) == 2
     assert "reserved for a later" in capsys.readouterr().err
 
 

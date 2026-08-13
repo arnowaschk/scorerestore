@@ -199,6 +199,75 @@ The command computes real metrics for the selected dataset; this README intentio
 publish a benchmark table before neural results exist and the later controlled evaluation milestone
 has been run.
 
+## Custom U-Net training
+
+Milestone 6 adds the readable, in-repository PyTorch U-Net: a shared four-level encoder/decoder,
+bilinear skip connections, GroupNorm, a one-channel ink-coverage cleaning head, and a four-channel
+independent-sigmoid semantic head in the fixed `background, staff, notation, text` order. The
+same model supports `clean`, `segment`, and `multitask`; inactive tasks do not contribute loss or
+checkpoint selection. Clean targets preserve antialiased ink coverage (`1 = ink`) while the input
+remains grayscale intensity (`0 = black`, `1 = white`).
+
+The foreground-aware crop sampler targets 80% occupied crops by default and uses uniform crops for
+the remaining 20%; no mirrored score augmentation is used. `configs/training/default.yaml` uses
+the V1 default 1024px crop and a 32-channel model, with conservative 4060 Ti 16 GB-oriented batch
+and accumulation settings. The `smoke.yaml` configuration uses a tiny model and 64px crops solely
+to validate CPU forward/backward/checkpoint paths. It falls back
+to the training split for validation only when a deliberately tiny dataset has no validation split.
+
+```bash
+uv run scorerestore train -c configs/training/default.yaml -o runs/training-demo
+uv run scorerestore train -c configs/training/short.yaml -o runs/training-short
+uv run scorerestore train -c configs/training/smoke.yaml -o runs/training-smoke
+uv run scorerestore train -c configs/training/resnet18.yaml -o runs/training-resnet18
+uv run scorerestore train -c configs/training/smoke.yaml -o runs/training-clean --set task=clean
+uv run scorerestore train -c configs/training/smoke.yaml -o runs/training-segment --set task=segment
+```
+
+For a real run, use a materialized dataset with a source-isolated validation split and set
+`training.device=auto` (CUDA is selected when available). CUDA uses AMP; CPU remains fully
+supported. Each run creates resolved configuration and environment provenance, append-only JSONL
+metrics, CSV metrics, checkpoint(s), and reserved plots/comparisons/report directories. The run
+records actual environment values only; unavailable Git metadata is recorded as `null` rather than
+guessed. CUDA uses BF16 AMP when the GPU supports it (including the RTX 4060 Ti), otherwise FP16
+with gradient scaling. This milestone does not yet provide tiled inference, final evaluation
+reports, or quality claims.
+
+### Transfer-learning comparison
+
+Milestone 7 adds the `resnet18` backend as the V1 transfer-learning comparison. It initializes a
+TorchVision `ResNet18_Weights.IMAGENET1K_V1` ImageNet encoder, replaces its first RGB convolution
+with the arithmetic mean of its pretrained RGB kernels for grayscale input, and uses a small
+U-Net-like bilinear decoder with the same cleaning and four-channel semantic heads. For small tile
+batches, encoder BatchNorm running statistics are frozen while their affine parameters remain
+trainable. Every transfer run records the exact weights enum and download URL, grayscale adaptation,
+BatchNorm policy, architecture, and parameter count in `environment.json`. The weights download on
+first use; ScoreRestore does not redistribute them.
+
+Use the same dataset, task, split, crop, seed, and training settings as `default.yaml` when
+comparing the custom U-Net and ResNet-18. A later evaluation milestone will generate formal metric
+reports; this milestone only makes a controlled comparison run possible.
+
+Training writes dependency-free progress lines to the terminal (and Docker logs): start settings,
+epoch/phase, batch count and percentage, running loss, elapsed time, ETA, and end-of-epoch losses.
+Docker Compose mounts `./data` at both `/data` and the repository-relative `/app/data`, so the
+default training configuration works unchanged in the container.
+
+`data/real_world/` is the canonical local location for unannotated real-score examples. They are
+useful for practical visual demonstrations, but are never V1 training, validation, or quantitative
+evaluation data because they have no ground truth.
+
+The Compose service reserves a 1 GiB RAM-backed `/dev/shm` area for PyTorch DataLoader workers.
+This is distinct from free disk space: Docker otherwise defaults to just 64 MiB of shared memory,
+which is insufficient for prefetched 1024px batches. On memory-constrained hosts, use synchronous
+loading instead (slower, but it needs no worker shared-memory queue):
+
+```bash
+docker compose run --rm scorerestore scorerestore train \
+  -c configs/training/default.yaml -o /runs/training-demo \
+  --set training.num_workers=0
+```
+
 ## Native scaffold check
 
 ```bash
@@ -228,8 +297,8 @@ docker compose -f compose.yaml -f compose.gpu.yaml run --rm scorerestore scorere
 ./scripts/docker/scorerestore-gpu --help
 ```
 
-The GPU override requires a compatible NVIDIA driver and NVIDIA Container Toolkit. The current
-image contains no PyTorch or model code yet, so this command only validates the container interface.
+The GPU override requires a compatible NVIDIA driver and NVIDIA Container Toolkit. It exposes the
+same PyTorch training commands as the CPU image to CUDA.
 
 ## License
 

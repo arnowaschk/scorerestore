@@ -1,0 +1,34 @@
+# Transfer-learning comparison: ImageNet-1K pretrained ResNet-18 encoder plus V1 decoder/heads.
+dataset_manifest: data/generated/scorerestore-demo-v1/manifests/samples.jsonl
+task: multitask
+model:
+  backend: resnet18
+  base_channels: 64
+  pretrained: true
+  # Running BatchNorm statistics stay fixed for small score-tile batches; affine weights train.
+  freeze_batch_norm: true
+crop:
+  size: 1024
+sampling:
+  train_crops_per_epoch: 800
+  validation_crops: 160
+  foreground_fraction: 0.8
+  minimum_foreground_occupancy: 0.01
+training:
+  batch_size: 2
+  epochs: 50
+  learning_rate: 0.0003
+  weight_decay: 0.0001
+  gradient_accumulation: 2
+  early_stopping_patience: 8
+  device: auto
+  seed: 20260812
+  num_workers: 2
+loss:
+  cleaning_bce: 1.0
+  cleaning_dice: 1.0
+  segmentation_bce: 1.0
+  segmentation_dice: 1.0
+  clean_task: 1.0
+  segment_task: 1.0
+  segmentation_classes: [1.0, 1.0, 1.0, 1.0]

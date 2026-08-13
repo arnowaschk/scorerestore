@@ -23,6 +23,8 @@ dependencies = [
   "opencv-python-headless>=4.13.0.92,<5",
   "Pillow>=11.3,<13",
   "PyYAML>=6.0.2,<7",
+  "torch>=2.6,<3",
+  "torchvision>=0.24,<1",
 ]
 
 [project.scripts]

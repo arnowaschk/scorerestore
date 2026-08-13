@@ -20,9 +20,11 @@ def test_compose_has_one_cpu_service_and_canonical_mounts() -> None:
     assert service["image"] == "scorerestore:0.1.0"
     assert set(service["volumes"]) == {
         "./data:/data",
+        "./data:/app/data:ro",
         "./models:/models",
         "./runs:/runs",
     }
+    assert service["shm_size"] == "1gb"
     assert "gpus" not in service
 
 

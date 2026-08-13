@@ -43,6 +43,7 @@ from scorerestore.lilypond.renderer import (
     render_score,
 )
 from scorerestore.provenance import ProvenanceValidationError, validate_score_manifest
+from scorerestore.training import TrainingConfigError, load_training_config, train
 
 _NOT_IMPLEMENTED_MESSAGE = (
     "{command} is part of the public ScoreRestore V1 interface but is reserved for a later "
@@ -64,12 +65,28 @@ def build_parser() -> argparse.ArgumentParser:
 
     commands = parser.add_subparsers(dest="command", metavar="COMMAND", required=True)
     for name, help_text in (
-        ("train", "Train a ScoreRestore model (Milestone 6)"),
         ("evaluate", "Evaluate a model and create reports (Milestone 9)"),
         ("infer", "Restore and segment input pages (Milestone 8)"),
     ):
         command_parser = commands.add_parser(name, help=help_text, description=help_text)
         command_parser.set_defaults(command_path=name)
+
+    training = commands.add_parser(
+        "train",
+        help="Train a ScoreRestore V1 neural backend",
+        description="Train a ScoreRestore V1 custom U-Net or transfer-learning backend.",
+    )
+    training.add_argument("-c", "--config", type=Path, required=True)
+    training.add_argument("-o", "--output", type=Path, required=True)
+    training.add_argument(
+        "--set",
+        dest="overrides",
+        action="append",
+        default=[],
+        metavar="FIELD=VALUE",
+        help="override a YAML field using dotted paths; repeat as needed",
+    )
+    training.set_defaults(command_path="train", handler=_run_training)
 
     baseline = commands.add_parser(
         "baseline", help="Run and evaluate the classical computer-vision cleaning baseline"
@@ -448,5 +465,19 @@ def _run_baseline(args: argparse.Namespace) -> int:
         f"Processed {result.sample_count} sample(s) through {len(result.variant_names)} "
         f"classical variants ({result.result_count} result(s)); "
         f"splits: {counts}; results: {result.output_directory}; summary: {result.summary_path}"
+    )
+    return 0
+
+
+def _run_training(args: argparse.Namespace) -> int:
+    try:
+        config = load_training_config(args.config, overrides=tuple(args.overrides))
+        result = train(config, args.output)
+    except (TrainingConfigError, ValueError, OSError) as error:
+        print(f"Training failed: {error}", file=sys.stderr)
+        return 1
+    print(
+        f"Completed {result.epochs_completed} epoch(s); best validation loss "
+        f"{result.best_validation_loss:.6f}; checkpoint: {result.checkpoint_path}"
     )
     return 0

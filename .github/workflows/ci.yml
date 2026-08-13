@@ -37,6 +37,11 @@ jobs:
         run: uv run ruff format --check .
       - name: Unit tests
         run: uv run pytest
+      - name: CPU neural training smoke
+        run: |
+          uv run scorerestore generate -c configs/dataset/smoke.yaml --output-root /tmp/scorerestore-data
+          uv run scorerestore train -c configs/training/smoke.yaml -o /tmp/scorerestore-training-smoke \
+            --set dataset_manifest=/tmp/scorerestore-data/scorerestore-smoke-v1/manifests/samples.jsonl
       - name: Native CLI smoke check
         run: uv run scorerestore --help
       - name: Inspect pinned environment

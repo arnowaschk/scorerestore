@@ -1,0 +1,32 @@
+dataset_manifest: data/generated/scorerestore-smoke-v1/manifests/samples.jsonl
+task: multitask
+model:
+  backend: unet
+  base_channels: 4
+  pretrained: false
+  freeze_batch_norm: true
+crop:
+  size: 64
+sampling:
+  train_crops_per_epoch: 2
+  validation_crops: 1
+  foreground_fraction: 0.8
+  minimum_foreground_occupancy: 0.01
+training:
+  batch_size: 1
+  epochs: 2
+  learning_rate: 0.003
+  weight_decay: 0.0
+  gradient_accumulation: 1
+  early_stopping_patience: null
+  device: cpu
+  seed: 20260812
+  num_workers: 0
+loss:
+  cleaning_bce: 1.0
+  cleaning_dice: 1.0
+  segmentation_bce: 1.0
+  segmentation_dice: 1.0
+  clean_task: 1.0
+  segment_task: 1.0
+  segmentation_classes: [1.0, 1.0, 1.0, 1.0]
