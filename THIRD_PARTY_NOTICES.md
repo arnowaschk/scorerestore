@@ -16,6 +16,7 @@ ScoreRestore does not distribute a prebuilt container image at this milestone.
 | PyYAML | 6.0.3 | MIT | YAML configuration parsing | https://pyyaml.org/ | Runtime Python dependency; exact resolution is in `uv.lock`. |
 | PyTorch | 2.6 or later within the locked `<3` range | BSD-3-Clause | Custom U-Net, loss calculation, and plain-PyTorch training loop | https://pytorch.org/ | Runtime dependency. Binary wheels may include separately licensed CUDA components; inspect the exact wheel notices before redistributing a built image. |
 | TorchVision | 0.28.0 | BSD-3-Clause | ResNet-18 architecture and ImageNet-1K pretrained encoder weights | https://pytorch.org/vision/ | Runtime dependency. `ResNet18_Weights.IMAGENET1K_V1` is downloaded from PyTorch's official model host at first use and is not bundled by ScoreRestore. |
+| pypdfium2 / PDFium | 4.30.0 | BSD-3-Clause | PDF input rasterization adapter | https://pypdfium2.readthedocs.io/ | Runtime dependency. PDF rasterization is input-only in V1; ScoreRestore does not reconstruct output PDFs. |
 | Hatchling | 1.27.0 | MIT | Python package build backend | https://github.com/pypa/hatch | Build-time Python dependency pinned in `pyproject.toml`. |
 | pytest | 8.4.2 | MIT | Test runner | https://pytest.org/ | Development and CI dependency only; exact resolution is in `uv.lock`. |
 | Ruff | 0.16.2 | MIT | Linting and formatting | https://github.com/astral-sh/ruff | Development and CI dependency only; exact resolution is in `uv.lock`. |

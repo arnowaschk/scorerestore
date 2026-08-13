@@ -22,6 +22,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Readable OpenCV classical cleaning comparison with shared illumination normalization, four fixed
   Otsu/adaptive variants with and without light morphology, foreground cleaning metrics, SSIM, and
   variant-labelled materialized results.
+- Tiled bounded-memory inference for raster, multipage TIFF, and PDF inputs; binary cleaning,
+  semantic masks/probabilities, overlays, per-page metadata, and a stable `scorerestore.clean()` API.
 
 ## [0.1.0] - 2026-08-11
 

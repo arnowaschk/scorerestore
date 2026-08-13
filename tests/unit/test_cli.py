@@ -44,11 +44,16 @@ def test_train_exposes_neural_backend_options(capsys: pytest.CaptureFixture[str]
     assert "custom U-Net or transfer-learning backend" in capsys.readouterr().out
 
 
-@pytest.mark.parametrize("command", ["evaluate", "infer"])
-def test_later_milestone_command_fails_explicitly(
-    command: str, capsys: pytest.CaptureFixture[str]
-) -> None:
-    assert main([command]) == 2
+def test_infer_exposes_tiled_inference_options(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit) as exit_info:
+        main(["infer", "--help"])
+
+    assert exit_info.value.code == 0
+    assert "tiled inference" in capsys.readouterr().out
+
+
+def test_later_milestone_command_fails_explicitly(capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["evaluate"]) == 2
     assert "reserved for a later" in capsys.readouterr().err
 
 

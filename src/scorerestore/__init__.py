@@ -16,11 +16,14 @@ from scorerestore.degradation import (
     DegradationResult,
     degrade,
 )
+from scorerestore.inference import CleanResult, clean
 
 __all__ = [
+    "CleanResult",
     "DegradationConfig",
     "DegradationPipeline",
     "DegradationResult",
     "__version__",
+    "clean",
     "degrade",
 ]

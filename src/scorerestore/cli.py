@@ -31,6 +31,16 @@ from scorerestore.degradation import (
     degrade,
     recipe_json,
 )
+from scorerestore.inference import (
+    InferenceConfigError,
+    InputReadError,
+    clean,
+    load_checkpoint_model,
+    load_inference_config,
+    read_input_pages,
+    write_page_outputs,
+    write_run_metadata,
+)
 from scorerestore.lilypond.constants import (
     DEFAULT_DPI,
     DEFAULT_MASK_THRESHOLD,
@@ -64,12 +74,27 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
 
     commands = parser.add_subparsers(dest="command", metavar="COMMAND", required=True)
-    for name, help_text in (
-        ("evaluate", "Evaluate a model and create reports (Milestone 9)"),
-        ("infer", "Restore and segment input pages (Milestone 8)"),
-    ):
+    for name, help_text in (("evaluate", "Evaluate a model and create reports (Milestone 9)"),):
         command_parser = commands.add_parser(name, help=help_text, description=help_text)
         command_parser.set_defaults(command_path=name)
+
+    inference = commands.add_parser(
+        "infer",
+        help="Restore and segment raster or PDF pages with tiled inference",
+        description="Restore and segment raster or PDF pages with bounded-memory tiled inference.",
+    )
+    inference.add_argument("input", type=Path, help="PNG, JPEG, TIFF, multipage TIFF, or PDF")
+    inference.add_argument("-c", "--config", type=Path, required=True)
+    inference.add_argument("-o", "--output", type=Path, required=True)
+    inference.add_argument(
+        "--set",
+        dest="overrides",
+        action="append",
+        default=[],
+        metavar="FIELD=VALUE",
+        help="override a YAML field using dotted paths; repeat as needed",
+    )
+    inference.set_defaults(command_path="infer", handler=_run_inference)
 
     training = commands.add_parser(
         "train",
@@ -480,4 +505,43 @@ def _run_training(args: argparse.Namespace) -> int:
         f"Completed {result.epochs_completed} epoch(s); best validation loss "
         f"{result.best_validation_loss:.6f}; checkpoint: {result.checkpoint_path}"
     )
+    return 0
+
+
+def _run_inference(args: argparse.Namespace) -> int:
+    output = args.output.resolve()
+    if output.exists():
+        print(f"Inference failed: output directory already exists: {output}", file=sys.stderr)
+        return 1
+    try:
+        config = load_inference_config(args.config, overrides=tuple(args.overrides))
+        model, checkpoint_metadata = load_checkpoint_model(config.checkpoint, device=config.device)
+        pages = read_input_pages(args.input, pdf_dpi=config.pdf_dpi)
+        output.mkdir(parents=True)
+        paths = []
+        for page in pages:
+            result = clean(
+                page.image,
+                model=model,
+                device=config.device,
+                tile_size=config.tile_size,
+                overlap=config.overlap,
+                cleaning_threshold=config.cleaning_threshold,
+                segmentation_threshold=config.segmentation_threshold,
+            )
+            paths.append(
+                write_page_outputs(
+                    output,
+                    page,
+                    result,
+                    input_path=args.input,
+                    checkpoint_metadata=checkpoint_metadata,
+                    overlay=config.overlay,
+                )
+            )
+        write_run_metadata(output, paths)
+    except (InferenceConfigError, InputReadError, ValueError, OSError) as error:
+        print(f"Inference failed: {error}", file=sys.stderr)
+        return 1
+    print(f"Processed {len(pages)} page(s); outputs: {output}")
     return 0

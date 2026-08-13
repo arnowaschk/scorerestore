@@ -1,0 +1,9 @@
+# V1 tiled inference defaults. The checkpoint path is intentionally explicit.
+checkpoint: runs/training-demo/checkpoints/best.pt
+device: auto
+tile_size: 1024
+overlap: 128
+cleaning_threshold: 0.5
+segmentation_threshold: 0.5
+pdf_dpi: 300
+overlay: true

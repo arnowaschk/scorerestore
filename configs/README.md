@@ -25,6 +25,10 @@ The `training/` directory contains custom U-Net and transfer-learning configurat
 quality benchmark. Benchmark configurations will be added only with the milestones that consume
 them.
 
+The `inference/default.yaml` file configures a checkpoint, device selection, tile size/overlap,
+binary cleaning and semantic thresholds, PDF rasterization DPI, and optional overlay output. Its
+1024px tile and 128px overlap defaults match the documented V1 inference settings.
+
 `baseline.yaml` configures the fixed four-variant classical comparison: shared smooth
 illumination-field estimation, Otsu and adaptive threshold parameters, one bounded light
 morphology, and the pristine-target ink threshold. Every run covers thresholding with and without

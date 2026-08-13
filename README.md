@@ -248,6 +248,38 @@ Use the same dataset, task, split, crop, seed, and training settings as `default
 comparing the custom U-Net and ResNet-18. A later evaluation milestone will generate formal metric
 reports; this milestone only makes a controlled comparison run possible.
 
+## Tiled inference
+
+Milestone 8 provides bounded-memory inference for PNG, JPEG, TIFF (including multipage TIFF), and
+PDF inputs. `infer` keeps every page independent and in order; PDFs are rasterized with pypdfium2
+at the configured DPI (300 by default). V1 writes a directory of per-page PNG outputs rather than
+reconstructing a PDF.
+
+```bash
+uv run scorerestore infer input.pdf \
+  -c configs/inference/default.yaml \
+  -o runs/inference-example \
+  --set checkpoint=runs/training-demo/checkpoints/best.pt
+```
+
+Each page directory contains a binary `cleaned.png`, cleaning probability, four independent semantic
+probability maps, four thresholded masks, an optional inspection overlay, and `metadata.json`.
+Outputs preserve the input raster dimensions exactly. The API is also available directly:
+
+```python
+from PIL import Image
+from scorerestore import clean
+from scorerestore.inference import load_checkpoint_model
+
+model, _ = load_checkpoint_model("runs/training-demo/checkpoints/best.pt")
+result = clean(Image.open("input.png"), model=model)
+result.cleaned.save("cleaned.png")
+```
+
+The default uses 1024px tiles with 128px overlap. Tiles are reflection-padded at boundaries and
+their logits are blended with a smooth raised-cosine window before thresholding, so neither cleaning
+nor segmentation results have tile seams. Whole pages are never resized to fit memory.
+
 Training writes dependency-free progress lines to the terminal (and Docker logs): start settings,
 epoch/phase, batch count and percentage, running loss, elapsed time, ETA, and end-of-epoch losses.
 Docker Compose mounts `./data` at both `/data` and the repository-relative `/app/data`, so the
