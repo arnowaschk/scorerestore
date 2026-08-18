@@ -91,6 +91,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     evaluation.add_argument("-c", "--config", type=Path, required=True)
     evaluation.add_argument("-o", "--output", type=Path, required=True)
+    evaluation.add_argument("--update", action="store_true", help="resume or reuse this output")
     evaluation.add_argument(
         "--set", dest="overrides", action="append", default=[], metavar="FIELD=VALUE"
     )
@@ -104,6 +105,7 @@ def build_parser() -> argparse.ArgumentParser:
     runtime_benchmark.add_argument("input", type=Path)
     runtime_benchmark.add_argument("-c", "--config", type=Path, required=True)
     runtime_benchmark.add_argument("-o", "--output", type=Path, required=True)
+    runtime_benchmark.add_argument("--update", action="store_true", help="reuse an existing result")
     runtime_benchmark.add_argument(
         "--model", required=True, help="named model from the evaluation config"
     )
@@ -141,6 +143,7 @@ def build_parser() -> argparse.ArgumentParser:
     real_world.add_argument(
         "-o", "--output", type=Path, required=True, help="new comparison output directory"
     )
+    real_world.add_argument("--update", action="store_true", help="resume this comparison output")
     real_world.add_argument(
         "-c",
         "--config",
@@ -178,6 +181,9 @@ def build_parser() -> argparse.ArgumentParser:
     training.add_argument("-c", "--config", type=Path, required=True)
     training.add_argument("-o", "--output", type=Path, required=True)
     training.add_argument(
+        "--update", action="store_true", help="resume a compatible interrupted training run"
+    )
+    training.add_argument(
         "--set",
         dest="overrides",
         action="append",
@@ -212,6 +218,11 @@ def build_parser() -> argparse.ArgumentParser:
     generation = commands.add_parser("generate", help="Generate a materialized synthetic dataset")
     generation.add_argument("-c", "--config", type=Path, required=True)
     generation.add_argument("--output-root", type=Path, default=Path("data/generated"))
+    generation.add_argument(
+        "--update",
+        action="store_true",
+        help="resume a compatible interrupted dataset generation, preserving valid artifacts",
+    )
     generation.add_argument(
         "--set",
         dest="overrides",
@@ -489,6 +500,7 @@ def _generate_dataset(args: argparse.Namespace) -> int:
             output_root=args.output_root,
             lilypond_binary=args.lilypond,
             progress=True,
+            update=args.update,
         )
     except (
         DatasetConfigError,
@@ -501,7 +513,8 @@ def _generate_dataset(args: argparse.Namespace) -> int:
         return 1
     counts = ", ".join(f"{name}={count}" for name, count in result.split_counts.items())
     print(
-        f"Generated {result.sample_count} sample(s) with {config.workers} CPU worker(s) at "
+        f"{'Updated' if args.update else 'Generated'} {result.sample_count} sample(s) with "
+        f"{config.workers} CPU worker(s) at "
         f"{result.dataset_directory}; "
         f"splits: {counts}; manifest: {result.manifest_path}"
     )
@@ -581,7 +594,7 @@ def _run_baseline(args: argparse.Namespace) -> int:
 def _run_training(args: argparse.Namespace) -> int:
     try:
         config = load_training_config(args.config, overrides=tuple(args.overrides))
-        result = train(config, args.output)
+        result = train(config, args.output, update=args.update)
     except (TrainingConfigError, ValueError, OSError) as error:
         print(f"Training failed: {error}", file=sys.stderr)
         return 1
@@ -643,6 +656,7 @@ def _run_real_world_comparison(args: argparse.Namespace) -> int:
             config,
             args.output,
             checkpoint_overrides=checkpoint_overrides,
+            update=args.update,
         )
     except (
         InputReadError,
@@ -675,7 +689,7 @@ def _checkpoint_overrides(raw: list[str]) -> dict[str, Path]:
 def _run_evaluation(args: argparse.Namespace) -> int:
     try:
         config = load_evaluation_config(args.config, overrides=tuple(args.overrides))
-        result = evaluate(config, args.output)
+        result = evaluate(config, args.output, update=args.update)
     except (EvaluationConfigError, ValueError, OSError) as error:
         print(f"Evaluation failed: {error}", file=sys.stderr)
         return 1
@@ -686,7 +700,9 @@ def _run_evaluation(args: argparse.Namespace) -> int:
 def _run_benchmark(args: argparse.Namespace) -> int:
     try:
         config = load_evaluation_config(args.config, overrides=tuple(args.overrides))
-        output = benchmark(config, args.input, args.output, model_name=args.model)
+        output = benchmark(
+            config, args.input, args.output, model_name=args.model, update=args.update
+        )
     except (EvaluationConfigError, ValueError, OSError) as error:
         print(f"Benchmark failed: {error}", file=sys.stderr)
         return 1

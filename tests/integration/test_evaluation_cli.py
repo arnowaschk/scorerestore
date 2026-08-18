@@ -47,6 +47,7 @@ def test_evaluate_keeps_challenge_separate_and_writes_deterministic_artifacts(
 
     assert checkpoint.is_file()
     assert manifest.is_file()
+    assert main(["evaluate", "-c", str(config), "-o", str(first), "--update"]) == 0
 
 
 def test_benchmark_writes_only_actual_measurements(tmp_path: Path) -> None:
@@ -80,6 +81,22 @@ def test_benchmark_writes_only_actual_measurements(tmp_path: Path) -> None:
     assert report["total_latency_seconds"] > 0
     assert report["total_megapixels_per_second"] > 0
     assert report["peak_gpu_memory_bytes"] is None
+    assert (
+        main(
+            [
+                "benchmark",
+                str(input_path),
+                "-c",
+                str(config),
+                "-o",
+                str(output),
+                "--model",
+                "clean_unet",
+                "--update",
+            ]
+        )
+        == 0
+    )
 
 
 def _evaluation_fixture(tmp_path: Path) -> tuple[Path, Path, Path]:

@@ -36,6 +36,18 @@ def test_cpu_training_smoke_writes_checkpoint_metrics_and_provenance(tmp_path: P
     assert (result.output_directory / "plots/loss.svg").is_file()
     assert (result.output_directory / "comparisons/cleaning-probability.png").is_file()
 
+    # A completed output is idempotent under --update. If interruption happens after the final
+    # epoch checkpoint but before the summary, it rebuilds only the final report.
+    (result.output_directory / "report/summary.json").unlink()
+    resumed = train(config, result.output_directory, update=True)
+    assert resumed.epochs_completed == config.epochs
+    resumed_rows = [
+        json.loads(line)
+        for line in (result.output_directory / "metrics.jsonl").read_text().splitlines()
+    ]
+    assert len(resumed_rows) == config.epochs
+    assert (result.output_directory / "report/summary.json").is_file()
+
 
 def test_resnet18_training_smoke_records_transfer_weight_provenance(tmp_path: Path) -> None:
     if os.environ.get("SCORERESTORE_TEST_PRETRAINED") != "1":

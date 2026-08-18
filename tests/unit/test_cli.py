@@ -45,6 +45,14 @@ def test_train_exposes_neural_backend_options(capsys: pytest.CaptureFixture[str]
     assert "custom U-Net or transfer-learning backend" in capsys.readouterr().out
 
 
+def test_generate_exposes_update_option(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit) as exit_info:
+        main(["generate", "--help"])
+
+    assert exit_info.value.code == 0
+    assert "--update" in capsys.readouterr().out
+
+
 def test_infer_exposes_tiled_inference_options(capsys: pytest.CaptureFixture[str]) -> None:
     with pytest.raises(SystemExit) as exit_info:
         main(["infer", "--help"])

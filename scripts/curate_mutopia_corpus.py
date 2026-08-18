@@ -37,16 +37,23 @@ def main() -> int:
     )
     parser.add_argument("-o", "--output", type=Path, required=True, help="new output directory")
     parser.add_argument(
+        "--update",
+        action="store_true",
+        help="resume an interrupted curation run without replacing matching source files",
+    )
+    parser.add_argument(
         "--from-local-repository",
         type=Path,
         help="read pinned paths from a local Mutopia checkout instead of downloading",
     )
     args = parser.parse_args()
     output = args.output.resolve()
-    if output.exists():
+    if output.exists() and not args.update:
         raise SystemExit(f"refusing to replace existing output directory: {output}")
+    if output.exists() and not output.is_dir():
+        raise SystemExit(f"output path is not a directory: {output}")
     catalog = _catalog(args.catalog)
-    output.mkdir(parents=True)
+    output.mkdir(parents=True, exist_ok=args.update)
     try:
         assets = []
         reports = []
@@ -57,13 +64,19 @@ def main() -> int:
             source = source_tree[item["path"]]
             _assert_public_domain_header(source, item["id"])
             source_directory = output / "sources" / item["id"]
-            source_directory.mkdir(parents=True)
+            source_directory.mkdir(parents=True, exist_ok=args.update)
             source_parent = PurePosixPath(item["path"]).parent
             for repository_path, source_bytes in source_tree.items():
                 relative_path = PurePosixPath(repository_path).relative_to(source_parent)
                 destination = source_directory / relative_path
                 destination.parent.mkdir(parents=True, exist_ok=True)
-                destination.write_bytes(source_bytes)
+                if destination.exists():
+                    if not destination.is_file() or destination.read_bytes() != source_bytes:
+                        raise ValueError(
+                            f"existing source differs from pinned content: {destination}"
+                        )
+                else:
+                    destination.write_bytes(source_bytes)
             source_path = source_directory / PurePosixPath(item["path"]).name
             source_url = _source_url(catalog["upstream"], item["path"])
             assets.append(
@@ -114,7 +127,8 @@ def main() -> int:
             encoding="utf-8",
         )
     except Exception:
-        shutil.rmtree(output, ignore_errors=True)
+        if not args.update:
+            shutil.rmtree(output, ignore_errors=True)
         raise
     print(f"Materialized {len(assets)} curated score sources at {output}")
     return 0

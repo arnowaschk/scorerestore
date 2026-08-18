@@ -57,6 +57,7 @@ def compare_real_world(
     output_directory: str | Path,
     *,
     checkpoint_overrides: dict[str, Path] | None = None,
+    update: bool = False,
 ) -> RealWorldComparisonResult:
     """Clean every real-world PDF with every ordered YAML model panel.
 
@@ -67,8 +68,10 @@ def compare_real_world(
     """
 
     output = Path(output_directory).resolve()
-    if output.exists():
+    if output.exists() and not update:
         raise RealWorldComparisonError(f"output directory already exists: {output}")
+    if output.exists() and not output.is_dir():
+        raise RealWorldComparisonError(f"comparison output is not a directory: {output}")
     sources = _source_pdfs(config.input_root)
     overrides = checkpoint_overrides or {}
     unknown_overrides = set(overrides) - {model.identifier for model in config.models}
@@ -104,7 +107,7 @@ def compare_real_world(
         for model in config.models
     }
 
-    output.mkdir(parents=True)
+    output.mkdir(parents=True, exist_ok=update)
     sheets: list[Image.Image] = []
     pages: list[dict[str, Any]] = []
     quality_rows: list[dict[str, str | int | float | None]] = []

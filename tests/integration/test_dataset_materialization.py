@@ -47,6 +47,7 @@ def test_materialize_validate_load_and_exactly_reproduce_smoke_dataset(
                 str(output_root),
                 "--lilypond",
                 str(dataset_lilypond_binary),
+                "--update",
             ]
         )
         == 0
@@ -102,6 +103,30 @@ def test_materialize_validate_load_and_exactly_reproduce_smoke_dataset(
     assert sha256_file(reproduced_path) == report.records[0]["hashes"]["input"]
 
     records = [json.loads(line) for line in manifest_path.read_text(encoding="utf-8").splitlines()]
+    missing_input = dataset_root / records[0]["input_path"]
+    preserved_input = dataset_root / records[1]["input_path"]
+    preserved_mtime = preserved_input.stat().st_mtime_ns
+    missing_input.unlink()
+    assert (
+        main(
+            [
+                "generate",
+                "-c",
+                str(SMOKE_CONFIG),
+                "--output-root",
+                str(output_root),
+                "--lilypond",
+                str(dataset_lilypond_binary),
+                "--update",
+            ]
+        )
+        == 0
+    )
+    resumed = validate_dataset_manifest(manifest_path)
+    assert len(resumed.records) == 2
+    assert sha256_file(missing_input) == records[0]["hashes"]["input"]
+    assert preserved_input.stat().st_mtime_ns == preserved_mtime
+
     records[1]["split"] = "test"
     manifest_path.write_text(
         "".join(json.dumps(record) + "\n" for record in records), encoding="utf-8"

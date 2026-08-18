@@ -66,16 +66,17 @@ uv run scorerestore generate -c configs/dataset/smoke.yaml --output-root data/ge
 uv run scorerestore dataset validate data/generated/scorerestore-smoke-v1/manifests/samples.jsonl
 ```
 
-For the complete CUDA experiment and retained reports, use a Docker host with NVIDIA Container
-Toolkit configured:
+For the complete resumable CUDA experiment, use a Docker host with NVIDIA Container Toolkit:
 
 ```bash
-bash scripts/release/full_run_gpu.sh
+bash scripts/release/full_run_gpu.sh --profile default --update
 ```
 
-It writes data below `data/full-run-gpu/` and reports below `runs/full-run-gpu/`. See the
-[workflow guide](docs/WORKFLOWS.md) for training, inference, evaluation, Docker, and release
-commands.
+It writes data below `data/full-run-gpu-default/` and reports below
+`runs/full-run-gpu-default/`. Resume the same profile with `--update`; use another profile for an
+independent run. Hosts that provide CUDA but disallow Docker can use
+`bash scripts/release/full_run_native.sh --profile default --update` instead. See the
+[workflow guide](docs/WORKFLOWS.md) for the command details.
 
 ## Workflow at a glance
 

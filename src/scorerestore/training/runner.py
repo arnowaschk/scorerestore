@@ -43,12 +43,21 @@ class TrainingResult:
     epochs_completed: int
 
 
-def train(config: TrainingConfig, output_directory: str | Path) -> TrainingResult:
-    """Train a custom U-Net, validate it, and atomically create a file-backed experiment run."""
+def train(
+    config: TrainingConfig, output_directory: str | Path, *, update: bool = False
+) -> TrainingResult:
+    """Train a model, optionally resuming an interrupted compatible run in place."""
 
     output = Path(output_directory).resolve()
-    if output.exists():
+    if output.exists() and not update:
         raise ValueError(f"output directory already exists: {output}")
+    if output.exists() and not output.is_dir():
+        raise ValueError(f"training output is not a directory: {output}")
+    if update and output.exists():
+        completed = _completed_result(output, config)
+        if completed is not None:
+            return completed
+        _validate_resume_config(output, config)
     device = _device(config.device)
     _seed_everything(config.seed)
     manifest = config.dataset_manifest.resolve()
@@ -93,18 +102,30 @@ def train(config: TrainingConfig, output_directory: str | Path) -> TrainingResul
     optimizer = AdamW(model.parameters(), lr=config.learning_rate, weight_decay=config.weight_decay)
     amp_dtype = _cuda_amp_dtype(device)
     scaler = torch.amp.GradScaler("cuda", enabled=amp_dtype == torch.float16)
-    output.mkdir(parents=True)
+    output.mkdir(parents=True, exist_ok=update)
     logger = ExperimentLogger(output)
-    logger.write_static(config, _environment(config, device, model, manifest))
     best_loss, stale_epochs, completed = float("inf"), 0, 0
     best_checkpoint = output / "checkpoints/best.pt"
+    last_checkpoint = output / "checkpoints/last.pt"
+    if update and last_checkpoint.is_file():
+        state = _load_resume_state(last_checkpoint, model, optimizer, scaler, config)
+        best_loss, stale_epochs, completed = state
+        logger.retain_through_epoch(completed)
+        logger.update_environment({"resumed_at": _timestamp()})
+    elif update and output.exists() and (output / "config.yaml").is_file():
+        raise ValueError(
+            f"cannot resume {output}: checkpoints/last.pt is missing; "
+            "start a new output directory"
+        )
+    else:
+        logger.write_static(config, _environment(config, device, model, manifest))
     print(
         f"Starting {config.task} training on {device}: {config.epochs} epoch(s), "
         f"{len(train_loader)} train and {len(validation_loader)} validation batch(es)/epoch.",
         flush=True,
     )
     try:
-        for epoch in range(1, config.epochs + 1):
+        for epoch in range(completed + 1, config.epochs + 1):
             train_data.set_epoch(epoch)
             validation_data.set_epoch(epoch)
             train_metrics = _epoch(
@@ -146,7 +167,7 @@ def train(config: TrainingConfig, output_directory: str | Path) -> TrainingResul
             current = validation_metrics["validation_loss"]
             if current < best_loss:
                 best_loss, stale_epochs = current, 0
-                torch.save(
+                _atomic_torch_save(
                     {
                         "model_state_dict": model.state_dict(),
                         "config": config.to_dict(),
@@ -157,6 +178,18 @@ def train(config: TrainingConfig, output_directory: str | Path) -> TrainingResul
                 )
             else:
                 stale_epochs += 1
+            _atomic_torch_save(
+                {
+                    "model_state_dict": model.state_dict(),
+                    "optimizer_state_dict": optimizer.state_dict(),
+                    "scaler_state_dict": scaler.state_dict(),
+                    "config": config.to_dict(),
+                    "epoch": completed,
+                    "best_validation_loss": best_loss,
+                    "stale_epochs": stale_epochs,
+                },
+                last_checkpoint,
+            )
             if (
                 config.early_stopping_patience is not None
                 and stale_epochs > config.early_stopping_patience
@@ -177,6 +210,90 @@ def train(config: TrainingConfig, output_directory: str | Path) -> TrainingResul
         # Keep partial metrics/provenance for diagnosis rather than silently deleting evidence.
         raise
     return TrainingResult(output, best_checkpoint, best_loss, completed)
+
+
+def _completed_result(output: Path, config: TrainingConfig) -> TrainingResult | None:
+    """Return a completed compatible run so ``--update`` is safely idempotent."""
+
+    summary_path = output / "report" / "summary.json"
+    best_checkpoint = output / "checkpoints" / "best.pt"
+    if not summary_path.is_file() or not best_checkpoint.is_file():
+        return None
+    try:
+        summary = json.loads(summary_path.read_text(encoding="utf-8"))
+        epochs = summary["epochs_completed"]
+        best_loss = summary["best_validation_loss"]
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+    if isinstance(epochs, bool) or not isinstance(epochs, int):
+        return None
+    if isinstance(best_loss, bool) or not isinstance(best_loss, (int, float)):
+        return None
+    _validate_resume_config(output, config)
+    return TrainingResult(output, best_checkpoint, float(best_loss), epochs)
+
+
+def _validate_resume_config(output: Path, config: TrainingConfig) -> None:
+    config_path = output / "config.yaml"
+    if not config_path.is_file():
+        return
+    try:
+        saved = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError) as error:
+        raise ValueError(f"cannot read existing training config: {error}") from error
+    if _config_signature(saved) != _config_signature(config.to_dict()):
+        raise ValueError(
+            "existing training output uses a different configuration; start a new output directory"
+        )
+
+
+def _load_resume_state(
+    path: Path,
+    model: torch.nn.Module,
+    optimizer: AdamW,
+    scaler: torch.amp.GradScaler,
+    config: TrainingConfig,
+) -> tuple[float, int, int]:
+    try:
+        state = torch.load(path, map_location="cpu", weights_only=False)
+        if state.get("config") != config.to_dict():
+            raise ValueError("saved checkpoint configuration differs")
+        model.load_state_dict(state["model_state_dict"])
+        optimizer.load_state_dict(state["optimizer_state_dict"])
+        scaler.load_state_dict(state["scaler_state_dict"])
+        completed = state["epoch"]
+        best_loss = state["best_validation_loss"]
+        stale_epochs = state["stale_epochs"]
+    except (OSError, RuntimeError, KeyError, TypeError, ValueError) as error:
+        raise ValueError(f"cannot resume training from {path}: {error}") from error
+    if (
+        isinstance(completed, bool)
+        or not isinstance(completed, int)
+        or isinstance(stale_epochs, bool)
+        or not isinstance(stale_epochs, int)
+        or isinstance(best_loss, bool)
+        or not isinstance(best_loss, (int, float))
+    ):
+        raise ValueError(f"cannot resume training from {path}: invalid checkpoint state")
+    return float(best_loss), stale_epochs, completed
+
+
+def _atomic_torch_save(payload: dict[str, Any], path: Path) -> None:
+    """Persist a resumable checkpoint without exposing a partial file after interruption."""
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(f"{path.suffix}.tmp")
+    try:
+        torch.save(payload, temporary)
+        temporary.replace(path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def _config_signature(config: object) -> str:
+    """Compare YAML and checkpoint configurations despite YAML tuple-to-list conversion."""
+
+    return json.dumps(config, sort_keys=True, separators=(",", ":"))
 
 
 def _loader(
@@ -263,10 +380,10 @@ class ExperimentLogger:
 
     def __init__(self, root: Path) -> None:
         self.root = root
-        (root / "checkpoints").mkdir()
+        (root / "checkpoints").mkdir(exist_ok=True)
         for name in ("plots", "comparisons", "report"):
-            (root / name).mkdir()
-        self.rows: list[dict[str, Any]] = []
+            (root / name).mkdir(exist_ok=True)
+        self.rows = _read_metric_rows(root / "metrics.jsonl")
 
     def write_static(self, config: TrainingConfig, environment: dict[str, Any]) -> None:
         (self.root / "config.yaml").write_text(
@@ -282,8 +399,26 @@ class ExperimentLogger:
 
     def append(self, row: dict[str, Any]) -> None:
         self.rows.append(row)
-        with (self.root / "metrics.jsonl").open("a", encoding="utf-8") as stream:
-            stream.write(json.dumps(row, sort_keys=True) + "\n")
+        self._write_rows()
+
+    def retain_through_epoch(self, epoch: int) -> None:
+        """Discard a metrics row that was logged after the last durable training checkpoint."""
+
+        retained = [
+            row
+            for row in self.rows
+            if isinstance(row.get("epoch"), int) and row["epoch"] <= epoch
+        ]
+        if len(retained) != len(self.rows):
+            self.rows = retained
+            self._write_rows()
+
+    def _write_rows(self) -> None:
+        with (self.root / "metrics.jsonl").open("w", encoding="utf-8") as stream:
+            for row in self.rows:
+                stream.write(json.dumps(row, sort_keys=True) + "\n")
+        if not self.rows:
+            return
         with (self.root / "metrics.csv").open("w", newline="", encoding="utf-8") as stream:
             writer = csv.DictWriter(stream, fieldnames=list(self.rows[0]))
             writer.writeheader()
@@ -313,6 +448,22 @@ class ExperimentLogger:
                 (self.root / "plots" / name).write_text(
                     _line_plot(self.rows, available), encoding="utf-8"
                 )
+
+
+def _read_metric_rows(path: Path) -> list[dict[str, Any]]:
+    if not path.is_file():
+        return []
+    rows: list[dict[str, Any]] = []
+    try:
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                value = json.loads(line)
+                if not isinstance(value, dict):
+                    raise ValueError("metric row is not an object")
+                rows.append(value)
+    except (OSError, json.JSONDecodeError, ValueError) as error:
+        raise ValueError(f"cannot read existing training metrics: {error}") from error
+    return rows
 
 
 def _device(selection: str) -> torch.device:

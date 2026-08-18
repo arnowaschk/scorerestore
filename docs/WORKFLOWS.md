@@ -35,6 +35,14 @@ uv run scorerestore generate -c configs/dataset/smoke.yaml --output-root data/ge
 uv run scorerestore dataset validate data/generated/scorerestore-smoke-v1/manifests/samples.jsonl
 ```
 
+For an interruptible generation, include `--update` on the initial run and on any later resume. It
+writes in place and preserves valid artifacts instead of replacing them:
+
+```bash
+uv run scorerestore generate -c configs/dataset/smoke.yaml \
+  --output-root data/generated --update
+```
+
 Reproduce one materialized sample to check its source, layout, masks, and degradation:
 
 ```bash
@@ -144,3 +152,23 @@ bash scripts/release/fresh_clone_check_gpu.sh
 
 The GPU gate requires CUDA in the container. Dataset rendering and the OpenCV baseline remain CPU
 operations; CUDA is used for neural training and inference.
+
+## Resumable full CUDA runs
+
+The Docker full run uses named profiles to isolate its artifacts. Start an interruptible run with
+`--update`, and use the same profile to continue it after an interruption:
+
+```bash
+bash scripts/release/full_run_gpu.sh --profile default --update
+```
+
+It writes `data/full-run-gpu-default/` and `runs/full-run-gpu-default/`. The script rebuilds the
+image before every invocation so changed configurations are included. To run the same CUDA workflow
+without Docker, use:
+
+```bash
+bash scripts/release/full_run_native.sh --profile default --update
+```
+
+The native run writes `data/full-run-native-default/` and `runs/full-run-native-default/`; it
+requires native LilyPond 2.26.0 and CUDA-enabled PyTorch.

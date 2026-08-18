@@ -40,12 +40,19 @@ class EvaluationResult:
     sample_count: int
 
 
-def evaluate(config: EvaluationConfig, output_directory: str | Path) -> EvaluationResult:
+def evaluate(
+    config: EvaluationConfig, output_directory: str | Path, *, update: bool = False
+) -> EvaluationResult:
     """Evaluate named checkpoints separately by split and create deterministic report artifacts."""
 
     output = Path(output_directory).resolve()
-    if output.exists():
+    if output.exists() and not update:
         raise ValueError(f"output directory already exists: {output}")
+    if output.exists() and not output.is_dir():
+        raise ValueError(f"evaluation output is not a directory: {output}")
+    completed = _completed_evaluation(output)
+    if update and completed is not None:
+        return completed
     manifest = config.dataset_manifest.resolve()
     dataset = MaterializedDataset(manifest)
     records = tuple(record for record in dataset._records if record["split"] in config.splits)
@@ -58,7 +65,7 @@ def evaluate(config: EvaluationConfig, output_directory: str | Path) -> Evaluati
     if variant is None:
         raise ValueError(f"unknown baseline variant: {config.baseline_variant}")
     selected_ids = _visual_ids(records, config.report_seed, config.report_samples)
-    output.mkdir(parents=True)
+    output.mkdir(parents=True, exist_ok=update)
     samples = [(record, dataset._load(record)) for record in records]
     baseline_rows: list[dict[str, Any]] = []
     baseline_images: dict[str, Image.Image] = {}
@@ -136,7 +143,7 @@ def evaluate(config: EvaluationConfig, output_directory: str | Path) -> Evaluati
     (output / "metrics.csv").write_text(_csv(rows), encoding="utf-8")
     (output / "summary.json").write_text(_json(summary), encoding="utf-8")
     report = output / "report"
-    report.mkdir()
+    report.mkdir(exist_ok=update)
     (report / "summary.md").write_text(_markdown_summary(summary), encoding="utf-8")
     return EvaluationResult(
         output,
@@ -148,7 +155,12 @@ def evaluate(config: EvaluationConfig, output_directory: str | Path) -> Evaluati
 
 
 def benchmark(
-    config: EvaluationConfig, input_path: str | Path, output_path: str | Path, *, model_name: str
+    config: EvaluationConfig,
+    input_path: str | Path,
+    output_path: str | Path,
+    *,
+    model_name: str,
+    update: bool = False,
 ) -> Path:
     """Measure actual tiled inference latency; never estimate or synthesize performance values."""
 
@@ -156,6 +168,8 @@ def benchmark(
     if model_spec is None:
         raise ValueError(f"unknown model name: {model_name}")
     output = Path(output_path).resolve()
+    if output.exists() and update and output.is_file():
+        return output
     if output.exists():
         raise ValueError(f"benchmark output already exists: {output}")
     model, checkpoint = load_checkpoint_model(model_spec.checkpoint, device=config.device)
@@ -223,6 +237,22 @@ def benchmark(
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(_json(report), encoding="utf-8")
     return output
+
+
+def _completed_evaluation(output: Path) -> EvaluationResult | None:
+    summary_path = output / "summary.json"
+    metrics_csv = output / "metrics.csv"
+    metrics_jsonl = output / "metrics.jsonl"
+    if not (summary_path.is_file() and metrics_csv.is_file() and metrics_jsonl.is_file()):
+        return None
+    try:
+        summary = json.loads(summary_path.read_text(encoding="utf-8"))
+        sample_count = summary["sample_count"]
+    except (OSError, json.JSONDecodeError, KeyError, TypeError):
+        return None
+    if isinstance(sample_count, bool) or not isinstance(sample_count, int):
+        return None
+    return EvaluationResult(output, summary_path, metrics_csv, metrics_jsonl, sample_count)
 
 
 def _metric_row(

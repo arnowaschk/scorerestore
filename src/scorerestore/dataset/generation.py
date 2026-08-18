@@ -37,6 +37,7 @@ from scorerestore.storage import FilesystemStorage
 from .config import DatasetGenerationConfig
 from .manifest import (
     DATASET_MANIFEST_SCHEMA_VERSION,
+    DatasetManifestError,
     read_manifest_records,
     sha256_file,
     validate_dataset_manifest,
@@ -130,13 +131,26 @@ def generate_dataset(
     output_root: str | Path = "data/generated",
     lilypond_binary: str | Path = "lilypond",
     progress: bool = False,
+    update: bool = False,
 ) -> DatasetGenerationResult:
-    """Render, degrade, and atomically materialize one configured V1 dataset."""
+    """Render, degrade, and materialize one configured V1 dataset.
+
+    Normal generation is atomic and refuses an existing dataset directory. ``update`` instead
+    writes in place so an interrupted run can be resumed; every pre-existing artifact is
+    hash-checked and preserved rather than replaced.
+    """
 
     output_root_path = Path(output_root).resolve()
     final_directory = output_root_path / config.dataset_id
-    if final_directory.exists():
+    if final_directory.exists() and not update:
         raise DatasetGenerationError(f"dataset directory already exists: {final_directory}")
+    if final_directory.exists() and not final_directory.is_dir():
+        raise DatasetGenerationError(f"dataset path is not a directory: {final_directory}")
+    if update:
+        _validate_existing_metadata(final_directory, config)
+        existing = _complete_existing_result(final_directory, config)
+        if existing is not None:
+            return existing
     source_manifest = config.source_manifest.resolve()
     source_provider = CuratedLilyPondDatasetSource(source_manifest, config.source_ids)
     assets = source_provider.assets()
@@ -160,11 +174,17 @@ def generate_dataset(
     )
 
     output_root_path.mkdir(parents=True, exist_ok=True)
-    temporary_directory = Path(
-        tempfile.mkdtemp(prefix=f".{config.dataset_id}-", dir=output_root_path)
-    )
-    temporary_directory.chmod(0o755)
-    storage = FilesystemStorage(temporary_directory)
+    temporary_directory: Path | None = None
+    if update:
+        final_directory.mkdir(parents=True, exist_ok=True)
+        final_directory.chmod(0o755)
+        storage = FilesystemStorage(final_directory)
+    else:
+        temporary_directory = Path(
+            tempfile.mkdtemp(prefix=f".{config.dataset_id}-", dir=output_root_path)
+        )
+        temporary_directory.chmod(0o755)
+        storage = FilesystemStorage(temporary_directory)
     try:
         for directory in (
             "inputs",
@@ -187,6 +207,7 @@ def generate_dataset(
             lilypond_binary=lilypond_binary,
             workers=config.workers,
             progress=progress,
+            update=update,
         )
         if not candidates:
             raise DatasetGenerationError("LilyPond rendering produced no candidate pages")
@@ -199,6 +220,7 @@ def generate_dataset(
             challenge_config=challenge_config,
             workers=config.workers,
             progress=progress,
+            update=update,
         )
         manifest_text = "".join(
             json.dumps(record, sort_keys=True, ensure_ascii=False) + "\n" for record in records
@@ -217,10 +239,13 @@ def generate_dataset(
         )
         storage.write_text("manifests/dataset.json", _json_text(metadata))
         shutil.rmtree(storage.path(".render-cache"))
+        shutil.rmtree(storage.path(".resume-render-cache"), ignore_errors=True)
         validate_dataset_manifest(manifest_path)
-        temporary_directory.replace(final_directory)
+        if temporary_directory is not None:
+            temporary_directory.replace(final_directory)
     except Exception:
-        shutil.rmtree(temporary_directory, ignore_errors=True)
+        if temporary_directory is not None:
+            shutil.rmtree(temporary_directory, ignore_errors=True)
         raise
 
     return DatasetGenerationResult(
@@ -230,6 +255,62 @@ def generate_dataset(
         sample_count=len(records),
         split_counts=split_counts,
         skipped_page_count=len(skipped_pages),
+    )
+
+
+def _validate_existing_metadata(directory: Path, config: DatasetGenerationConfig) -> None:
+    """Reject an update that would combine artifacts from different configurations."""
+
+    metadata_path = directory / "manifests" / "dataset.json"
+    if not metadata_path.is_file():
+        return
+    try:
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise DatasetGenerationError(f"cannot read existing dataset metadata: {error}") from error
+    expected = hashlib.sha256(_canonical_json(config.to_dict())).hexdigest()
+    if not isinstance(metadata, dict) or metadata.get("config_sha256") != expected:
+        raise DatasetGenerationError(
+            "existing dataset metadata is incompatible with this configuration; "
+            "use a new dataset_id or output root"
+        )
+
+
+def _complete_existing_result(
+    directory: Path, config: DatasetGenerationConfig
+) -> DatasetGenerationResult | None:
+    """Return an existing valid dataset result so update is a no-op when nothing is missing."""
+
+    manifest_path = directory / "manifests" / "samples.jsonl"
+    metadata_path = directory / "manifests" / "dataset.json"
+    if not manifest_path.is_file() or not metadata_path.is_file():
+        return None
+    try:
+        report = validate_dataset_manifest(manifest_path)
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    except (DatasetManifestError, OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(metadata, dict):
+        return None
+    split_counts = metadata.get("split_counts")
+    if not isinstance(split_counts, dict):
+        return None
+    try:
+        counts = {name: int(split_counts.get(name, 0)) for name in config.split_weights}
+    except (TypeError, ValueError):
+        return None
+    if len(report.records) != config.target_samples:
+        return None
+    skipped = metadata.get("skipped_page_count", 0)
+    if isinstance(skipped, bool) or not isinstance(skipped, int):
+        return None
+    return DatasetGenerationResult(
+        dataset_directory=directory,
+        manifest_path=manifest_path,
+        metadata_path=metadata_path,
+        sample_count=len(report.records),
+        split_counts=counts,
+        skipped_page_count=skipped,
     )
 
 
@@ -345,6 +426,7 @@ def _render_candidates(
     lilypond_binary: str | Path,
     workers: int,
     progress: bool,
+    update: bool,
 ) -> tuple[list[_RenderedCandidate], list[dict[str, object]]]:
     tasks = [
         (asset, layout_seed, layout)
@@ -374,6 +456,7 @@ def _render_candidates(
                     config,
                     storage,
                     lilypond_binary,
+                    update,
                 ): index
                 for index, (asset, layout_seed, layout) in enumerate(tasks)
             }
@@ -404,6 +487,7 @@ def _render_candidate(
     config: DatasetGenerationConfig,
     storage: FilesystemStorage,
     lilypond_binary: str | Path,
+    update: bool,
 ) -> tuple[list[_RenderedCandidate], list[dict[str, object]]]:
     """Render one independent source/layout task; safe to run alongside other tasks."""
 
@@ -415,68 +499,78 @@ def _render_candidate(
         "strict_unknown_grobs": config.strict_unknown_grobs,
     }
     render_id = _stable_id("render", {"source_sha256": asset.source_sha256, **render_parameters})
+    cache_path = storage.path(f".render-cache/{render_id}")
+    temporary_root: tempfile.TemporaryDirectory[str] | None = None
+    if update and cache_path.exists():
+        resume_root = storage.make_directory(".resume-render-cache")
+        temporary_root = tempfile.TemporaryDirectory(prefix=f"{render_id}-", dir=resume_root)
+        cache_path = Path(temporary_root.name) / "render"
     try:
-        result = render_score(
-            asset.source_path,
-            storage.path(f".render-cache/{render_id}"),
-            config=LilyPondRenderConfig(
-                lilypond_binary=lilypond_binary,
-                dpi=config.dpi,
-                mask_threshold=config.mask_threshold,
-                strict_unknown_grobs=config.strict_unknown_grobs,
-                expected_nonempty=(),
-                layout=layout,
-            ),
-            expected_source_sha256=asset.source_sha256,
-        )
-    except LilyPondRenderError as error:
-        raise DatasetGenerationError(
-            f"render failed for source {asset.id}, layout seed {layout_seed}: {error}"
-        ) from error
-    storage.copy_file(result.metadata_path, f"reports/renders/{render_id}.json")
-    candidates: list[_RenderedCandidate] = []
-    skipped_pages: list[dict[str, object]] = []
-    for page in result.pages:
-        missing_masks = _missing_trainable_masks(page.mask_paths)
-        if missing_masks:
-            skipped_pages.append(
-                {
-                    "source_id": asset.id,
-                    "render_id": render_id,
-                    "page": page.page,
-                    "layout_seed": layout_seed,
-                    "missing_masks": missing_masks,
-                }
+        try:
+            result = render_score(
+                asset.source_path,
+                cache_path,
+                config=LilyPondRenderConfig(
+                    lilypond_binary=lilypond_binary,
+                    dpi=config.dpi,
+                    mask_threshold=config.mask_threshold,
+                    strict_unknown_grobs=config.strict_unknown_grobs,
+                    expected_nonempty=(),
+                    layout=layout,
+                ),
+                expected_source_sha256=asset.source_sha256,
             )
-            continue
-        page_stem = f"{render_id}-p{page.page:03d}"
-        clean_path = f"clean/{page_stem}.png"
-        storage.copy_file(page.pristine_path, clean_path)
-        mask_paths: dict[str, str] = {}
-        mask_hashes: dict[str, str] = {}
-        for name in ("background", "staff", "notation", "text"):
-            mask_path = f"masks/{name}/{page_stem}.png"
-            copied = storage.copy_file(page.mask_paths[name], mask_path)
-            mask_paths[name] = mask_path
-            mask_hashes[name] = sha256_file(copied)
-        storage.copy_file(page.qa_panel_path, f"reports/qa/{page_stem}.png")
-        candidates.append(
-            _RenderedCandidate(
-                asset=asset,
-                split=split,
-                render_id=render_id,
-                page=page.page,
-                width=page.width,
-                height=page.height,
-                layout_seed=layout_seed,
-                render_parameters=render_parameters,
-                clean_path=clean_path,
-                clean_sha256=sha256_file(storage.path(clean_path)),
-                mask_paths=mask_paths,
-                mask_sha256=mask_hashes,
+        except LilyPondRenderError as error:
+            raise DatasetGenerationError(
+                f"render failed for source {asset.id}, layout seed {layout_seed}: {error}"
+            ) from error
+        _copy_or_verify(storage, result.metadata_path, f"reports/renders/{render_id}.json")
+        candidates: list[_RenderedCandidate] = []
+        skipped_pages: list[dict[str, object]] = []
+        for page in result.pages:
+            missing_masks = _missing_trainable_masks(page.mask_paths)
+            if missing_masks:
+                skipped_pages.append(
+                    {
+                        "source_id": asset.id,
+                        "render_id": render_id,
+                        "page": page.page,
+                        "layout_seed": layout_seed,
+                        "missing_masks": missing_masks,
+                    }
+                )
+                continue
+            page_stem = f"{render_id}-p{page.page:03d}"
+            clean_path = f"clean/{page_stem}.png"
+            _copy_or_verify(storage, page.pristine_path, clean_path)
+            mask_paths: dict[str, str] = {}
+            mask_hashes: dict[str, str] = {}
+            for name in ("background", "staff", "notation", "text"):
+                mask_path = f"masks/{name}/{page_stem}.png"
+                copied = _copy_or_verify(storage, page.mask_paths[name], mask_path)
+                mask_paths[name] = mask_path
+                mask_hashes[name] = sha256_file(copied)
+            _copy_or_verify(storage, page.qa_panel_path, f"reports/qa/{page_stem}.png")
+            candidates.append(
+                _RenderedCandidate(
+                    asset=asset,
+                    split=split,
+                    render_id=render_id,
+                    page=page.page,
+                    width=page.width,
+                    height=page.height,
+                    layout_seed=layout_seed,
+                    render_parameters=render_parameters,
+                    clean_path=clean_path,
+                    clean_sha256=sha256_file(storage.path(clean_path)),
+                    mask_paths=mask_paths,
+                    mask_sha256=mask_hashes,
+                )
             )
-        )
-    return candidates, skipped_pages
+        return candidates, skipped_pages
+    finally:
+        if temporary_root is not None:
+            temporary_root.cleanup()
 
 
 def _materialize_samples(
@@ -488,6 +582,7 @@ def _materialize_samples(
     challenge_config: DegradationConfig,
     workers: int,
     progress: bool,
+    update: bool,
 ) -> list[dict[str, Any]]:
     rng = random.Random(config.seed)
     rng.shuffle(candidates)
@@ -517,25 +612,32 @@ def _materialize_samples(
         len(tasks),
         progress,
     )
+    existing_records = _existing_records(storage) if update else {}
     reporter.start()
     records: list[dict[str, Any] | None] = [None] * len(tasks)
     try:
         with ThreadPoolExecutor(
             max_workers=min(workers, len(tasks)), thread_name_prefix="degrade"
         ) as pool:
-            futures = {
-                pool.submit(
-                    _materialize_sample,
-                    candidate,
-                    selected_config,
-                    sample_seed,
-                    sample_id,
-                    config,
-                    storage,
-                    created_at,
-                ): index
-                for index, (candidate, selected_config, sample_seed, sample_id) in enumerate(tasks)
-            }
+            futures = {}
+            for index, (candidate, selected_config, sample_seed, sample_id) in enumerate(tasks):
+                existing = existing_records.get(sample_id)
+                if existing is not None and _record_artifacts_are_valid(storage, existing):
+                    records[index] = existing
+                    reporter.advance()
+                    continue
+                futures[
+                    pool.submit(
+                        _materialize_sample,
+                        candidate,
+                        selected_config,
+                        sample_seed,
+                        sample_id,
+                        config,
+                        storage,
+                        created_at,
+                    )
+                ] = index
             for future in as_completed(futures):
                 records[futures[future]] = future.result()
                 reporter.advance()
@@ -559,7 +661,7 @@ def _materialize_sample(
         clean = opened.copy()
     degraded = degrade(clean, config=selected_config, seed=sample_seed)
     input_path = f"inputs/{sample_id}.png"
-    input_file = storage.write_bytes(input_path, _png_bytes(degraded.image))
+    input_file = _write_or_verify(storage, input_path, _png_bytes(degraded.image))
     recipe = dict(degraded.recipe)
     recipe["dataset"] = {
         "dataset_id": config.dataset_id,
@@ -570,7 +672,7 @@ def _materialize_sample(
         "split": candidate.split,
     }
     recipe_path = f"manifests/recipes/{sample_id}.json"
-    recipe_file = storage.write_text(recipe_path, _json_text(recipe))
+    recipe_file = _write_or_verify(storage, recipe_path, _json_text(recipe).encode("utf-8"))
     return {
         "schema_version": DATASET_MANIFEST_SCHEMA_VERSION,
         "sample_id": sample_id,
@@ -605,6 +707,93 @@ def _materialize_sample(
         "dpi": config.dpi,
         "created_at": created_at,
     }
+
+
+def _copy_or_verify(storage: FilesystemStorage, source: Path, relative_path: str) -> Path:
+    """Copy a new artifact, or preserve an existing byte-identical one during update."""
+
+    destination = storage.path(relative_path)
+    if destination.exists():
+        if not destination.is_file():
+            raise DatasetGenerationError(f"existing artifact is not a file: {relative_path}")
+        if sha256_file(source) != sha256_file(destination):
+            raise DatasetGenerationError(
+                f"existing artifact differs from regenerated content: {relative_path}"
+            )
+        return destination
+    return storage.copy_file(source, relative_path)
+
+
+def _write_or_verify(storage: FilesystemStorage, relative_path: str, content: bytes) -> Path:
+    """Write a missing artifact without replacing an existing artifact during update."""
+
+    destination = storage.path(relative_path)
+    if destination.exists():
+        if not destination.is_file():
+            raise DatasetGenerationError(f"existing artifact is not a file: {relative_path}")
+        if sha256_file(destination) != hashlib.sha256(content).hexdigest():
+            raise DatasetGenerationError(
+                f"existing artifact differs from regenerated content: {relative_path}"
+            )
+        return destination
+    return storage.write_bytes(relative_path, content)
+
+
+def _existing_records(storage: FilesystemStorage) -> dict[str, dict[str, Any]]:
+    """Load any validly encoded records retained before an interrupted update."""
+
+    manifest_path = storage.path("manifests/samples.jsonl")
+    if not manifest_path.is_file():
+        return {}
+    try:
+        records = read_manifest_records(manifest_path)
+    except DatasetManifestError as error:
+        raise DatasetGenerationError(
+            "existing update manifest is malformed; repair or remove it before resuming: "
+            f"{error}"
+        ) from error
+    by_id: dict[str, dict[str, Any]] = {}
+    for record in records:
+        sample_id = record.get("sample_id")
+        if not isinstance(sample_id, str) or not sample_id:
+            raise DatasetGenerationError("existing update manifest contains an invalid sample_id")
+        if sample_id in by_id:
+            raise DatasetGenerationError(
+                f"existing update manifest repeats sample_id {sample_id!r}"
+            )
+        by_id[sample_id] = record
+    return by_id
+
+
+def _record_artifacts_are_valid(storage: FilesystemStorage, record: dict[str, Any]) -> bool:
+    """Check a record's materialized files without rejecting unrelated incomplete records."""
+
+    mask_paths = record.get("mask_paths")
+    hashes = record.get("hashes")
+    if not isinstance(mask_paths, dict) or not isinstance(hashes, dict):
+        return False
+    artifacts = {
+        "input": record.get("input_path"),
+        "clean": record.get("clean_target_path"),
+        "recipe": record.get("recipe_path"),
+        **{
+            f"mask_{name}": mask_paths.get(name)
+            for name in ("background", "staff", "notation", "text")
+        },
+    }
+    for name, relative_path in artifacts.items():
+        expected = hashes.get(name)
+        if not isinstance(relative_path, str) or not relative_path:
+            return False
+        if not isinstance(expected, str) or len(expected) != 64:
+            return False
+        try:
+            path = storage.path(relative_path)
+        except ValueError:
+            return False
+        if not path.is_file() or sha256_file(path) != expected:
+            return False
+    return True
 
 
 def _layout_variants(
