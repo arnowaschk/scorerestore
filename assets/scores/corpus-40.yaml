@@ -1,0 +1,51 @@
+# Reviewable V1 expansion catalogue. Each entry is an individual Mutopia LilyPond source whose
+# header declares Public Domain. `scripts/curate_mutopia_corpus.py` materializes this locked list
+# into a new directory with a strict ScoreRestore manifest and SHA-256 values.
+schema_version: 1
+upstream:
+  repository: https://github.com/MutopiaProject/MutopiaProject
+  commit: 2144afd6f52d56c5b6995b8b589ef1268b3139f0
+  source_file_rights_basis: >-
+    The pinned Mutopia source header declares Public Domain and states that the typesetter placed
+    the score in the public domain.
+scores:
+  - {id: bach-bwv784-invention-13, composer: Johann Sebastian Bach, death_year: 1750, work: BWV 784, path: ftp/BachJS/BWV784/bach-invention-13/bach-invention-13.ly, coverage: dense_polyphony}
+  - {id: bach-bwv870-wtc2-prelude-1, composer: Johann Sebastian Bach, death_year: 1750, work: BWV 870, path: ftp/BachJS/BWV870/wtk2prelude1/wtk2prelude1.ly, coverage: sparse_notation}
+  - {id: bach-bwv895-prelude-and-fugue, composer: Johann Sebastian Bach, death_year: 1750, work: BWV 895, path: ftp/BachJS/BWV895/bwv895/bwv895-lys/bwv895.ly, coverage: polyphony}
+  - {id: bach-bwv830-partita-1, composer: Johann Sebastian Bach, death_year: 1750, work: BWV 830, path: ftp/BachJS/BWV830/BWV-830/BWV-830-lys/BWV-830-1.ly, coverage: keyboard}
+  - {id: beethoven-op10-1-movement-1, composer: Ludwig van Beethoven, death_year: 1827, work: Op. 10 No. 1, path: ftp/BeethovenLv/O10/LVB_Sonate_10no1_1/LVB_Sonate_10no1_1.ly, coverage: piano}
+  - {id: beethoven-op10-2-movement-1, composer: Ludwig van Beethoven, death_year: 1827, work: Op. 10 No. 2, path: ftp/BeethovenLv/O10/lvb_sonate_10no2_1/lvb_sonate_10no2_1.ly, coverage: piano}
+  - {id: beethoven-op11-trio-1, composer: Ludwig van Beethoven, death_year: 1827, work: Op. 11, path: ftp/BeethovenLv/O11/Trio_op11_1/Trio_op11_1-lys/Trio_op11_1.ly, coverage: chamber_ensemble}
+  - {id: mozart-kv523, composer: Wolfgang Amadeus Mozart, death_year: 1791, work: KV 523, path: ftp/MozartWA/KV523/k523/k523-lys/k523.ly, coverage: vocal_music}
+  - {id: mozart-kv560b, composer: Wolfgang Amadeus Mozart, death_year: 1791, work: KV 560b, path: ftp/MozartWA/KV560b/k560b/k560b.ly, coverage: chamber_ensemble}
+  - {id: mozart-kv574, composer: Wolfgang Amadeus Mozart, death_year: 1791, work: KV 574, path: ftp/MozartWA/KV574/k574/k574.ly, coverage: piano}
+  - {id: chopin-b130-etude-1, composer: Frédéric Chopin, death_year: 1849, work: B.130 No. 1, path: ftp/ChopinFF/B130/TroisNouvellesEtudes_Chopin_n1/TroisNouvellesEtudes_Chopin_n1.ly, coverage: piano}
+  - {id: chopin-op10-2, composer: Frédéric Chopin, death_year: 1849, work: Op. 10 No. 2, path: ftp/ChopinFF/O10/10-02-i/10-02-i.ly, coverage: piano}
+  - {id: chopin-op10-9, composer: Frédéric Chopin, death_year: 1849, work: Op. 10 No. 9, path: ftp/ChopinFF/O10/chopin-op-10-09-wfi/chopin-op-10-09-wfi.ly, coverage: piano}
+  - {id: chopin-op10-12, composer: Frédéric Chopin, death_year: 1849, work: Op. 10 No. 12, path: ftp/ChopinFF/O10/op-10-12-wfi/op-10-12-wfi.ly, coverage: piano}
+  - {id: schubert-d118-gretchen, composer: Franz Schubert, death_year: 1828, work: D.118, path: ftp/SchubertF/D118/gretchen/gretchen-lys/gretchen.ly, coverage: vocal_lyrics}
+  - {id: schubert-d120-trost, composer: Franz Schubert, death_year: 1828, work: D.120, path: ftp/SchubertF/D120/SchubertF-D120-TrostInThraenen/SchubertF-D120-TrostInThraenen.ly, coverage: vocal_lyrics}
+  - {id: schubert-d162-naehe, composer: Franz Schubert, death_year: 1828, work: D.162, path: ftp/SchubertF/D162/SchubertF-D162_NaeheDesGeliebten/SchubertF-D162_NaeheDesGeliebten.ly, coverage: vocal_lyrics}
+  - {id: schubert-d257-heidenroeslein, composer: Franz Schubert, death_year: 1828, work: D.257, path: ftp/SchubertF/D257/SchubertF-D257-Heidenroeslein/SchubertF-D257-Heidenroeslein.ly, coverage: vocal_lyrics}
+  - {id: schumann-op15-1, composer: Robert Schumann, death_year: 1856, work: Op. 15 No. 1, path: ftp/SchumannR/O15/SchumannOp15No01/SchumannOp15No01.ly, coverage: piano}
+  - {id: schumann-op15-5, composer: Robert Schumann, death_year: 1856, work: Op. 15 No. 5, path: ftp/SchumannR/O15/SchumannOp15No05/SchumannOp15No05.ly, coverage: piano}
+  - {id: schumann-op48-ich-grolle-nicht, composer: Robert Schumann, death_year: 1856, work: Op. 48, path: ftp/SchumannR/O48/Ich_grolle_nicht/Ich_grolle_nicht.ly, coverage: vocal_lyrics}
+  - {id: haydn-hob16-27-1, composer: Joseph Haydn, death_year: 1809, work: Hob. XVI:27 I, path: ftp/HaydnFJ/HOB-XVI-27/hob-xvi-27-i-allegro-con-brio/hob-xvi-27-i-allegro-con-brio.ly, coverage: piano}
+  - {id: haydn-hob16-27-2, composer: Joseph Haydn, death_year: 1809, work: Hob. XVI:27 II, path: ftp/HaydnFJ/HOB-XVI-27/hob-xvi-27-ii-menuet-trio/hob-xvi-27-ii-menuet-trio.ly, coverage: piano}
+  - {id: haydn-hob16-27-3, composer: Joseph Haydn, death_year: 1809, work: Hob. XVI:27 III, path: ftp/HaydnFJ/HOB-XVI-27/hob-xvi-27-iii-presto/hob-xvi-27-iii-presto.ly, coverage: piano}
+  - {id: joplin-elite-syncopations, composer: Scott Joplin, death_year: 1917, work: Elite Syncopations, path: ftp/JoplinS/EliteSyncopations/EliteSyncopations.ly, coverage: syncopation}
+  - {id: joplin-pineapple-rag, composer: Scott Joplin, death_year: 1917, work: Pineapple Rag, path: ftp/JoplinS/PineappleRag/PineappleRag.ly, coverage: syncopation}
+  - {id: joplin-something-doing, composer: Scott Joplin, death_year: 1917, work: Something Doing, path: ftp/JoplinS/SomethingDoing/SomethingDoing.ly, coverage: syncopation}
+  - {id: joplin-strenuous-life, composer: Scott Joplin, death_year: 1917, work: The Strenuous Life, path: ftp/JoplinS/TheStrenuousLife/TheStrenuousLife.ly, coverage: syncopation}
+  - {id: telemann-sonata-1, composer: Georg Philipp Telemann, death_year: 1767, work: Sonata 1, path: ftp/TelemannGP/Sonata_1/Sonata_1.ly, coverage: multiple_clefs}
+  - {id: telemann-canon-sonata-1, composer: Georg Philipp Telemann, death_year: 1767, work: Canon Sonata 1, path: ftp/TelemannGP/TelemannGP-canons-sonate1/TelemannGP-canons-sonate1.ly, coverage: multiple_voices}
+  - {id: telemann-canon-sonata-2, composer: Georg Philipp Telemann, death_year: 1767, work: Canon Sonata 2, path: ftp/TelemannGP/TelemannGP-canons-sonate2/TelemannGP-canons-sonate2.ly, coverage: multiple_voices}
+  - {id: telemann-twv40-duet, composer: Georg Philipp Telemann, death_year: 1767, work: TWV 40, path: ftp/TelemannGP/TWV40/Duett-Telemann/Duett-Telemann-lys/Duett-Telemann.ly, coverage: chamber_ensemble}
+  - {id: dowland-unquiet-thoughts, composer: John Dowland, death_year: 1626, work: First Book of Songs No. 1, path: ftp/DowlandJ/ALS1/UnquietThoughts/UnquietThoughts.ly, coverage: renaissance_vocal}
+  - {id: dowland-come-again, composer: John Dowland, death_year: 1626, work: First Book of Songs No. 17, path: ftp/DowlandJ/ALS17/ComeAgain/ComeAgain.ly, coverage: renaissance_vocal}
+  - {id: purcell-fairest-isle, composer: Henry Purcell, death_year: 1695, work: Fairest Isle, path: ftp/PurcellH/FairestIsle/FairestIsle.ly, coverage: vocal_lyrics}
+  - {id: handel-aylesford-overture, composer: George Frideric Handel, death_year: 1759, work: Aylesford 1, path: ftp/HandelGF/Aylesford/01-overture/01-overture.ly, coverage: keyboard}
+  - {id: handel-aylesford-gavotte, composer: George Frideric Handel, death_year: 1759, work: Aylesford 3, path: ftp/HandelGF/Aylesford/03-gavotte/03-gavotte.ly, coverage: keyboard}
+  - {id: handel-aylesford-fugue, composer: George Frideric Handel, death_year: 1759, work: Aylesford 5, path: ftp/HandelGF/Aylesford/05-fuga/05-fuga.ly, coverage: polyphony}
+  - {id: handel-aylesford-concerto, composer: George Frideric Handel, death_year: 1759, work: Aylesford 7, path: ftp/HandelGF/Aylesford/07-concerto/07-concerto.ly, coverage: keyboard}
+  - {id: handel-aylesford-air, composer: George Frideric Handel, death_year: 1759, work: Aylesford 13, path: ftp/HandelGF/Aylesford/13-air/13-air.ly, coverage: sparse_notation}

@@ -8,6 +8,7 @@ ScoreRestore does not distribute a prebuilt container image at this milestone.
 |---|---:|---|---|---|---|
 | Python | 3.12.11 | Python-2.0 | Runtime and Docker base | https://www.python.org/ | Docker build uses the official `python:3.12.11-slim-bookworm` image. |
 | Debian | bookworm-slim base | Multiple free-software licenses | Base operating-system packages | https://www.debian.org/ | Consult package-level copyright files if distributing a built image. |
+| DejaVu Sans | Debian `fonts-dejavu-core` package | Bitstream Vera license with public-domain additions | Unicode glyph coverage requested by curated Mutopia source markup | https://dejavu-fonts.github.io/ | Installed in the container with Fontconfig; it prevents fallback to a LilyPond font lacking U+01C0. |
 | uv | 0.11.20 | Apache-2.0 OR MIT | Locked dependency installation | https://github.com/astral-sh/uv | Copied from the versioned official uv container image during build. |
 | LilyPond | 2.26.0 | GPL-3.0-or-later | Score engraving and semantic render passes | https://gitlab.com/lilypond/lilypond/-/releases/v2.26.0 | Docker builds download and checksum the official binary. Audit GPL source/notice obligations before distributing a prebuilt ScoreRestore image. |
 | NumPy | 2.4.6 (Python 3.11), 2.5.2 (Python 3.12) | BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0 | Deterministic numerical image degradation | https://numpy.org/ | Runtime Python dependency; license expression and exact platform resolutions are recorded in installed metadata and `uv.lock`. |
@@ -16,12 +17,13 @@ ScoreRestore does not distribute a prebuilt container image at this milestone.
 | PyYAML | 6.0.3 | MIT | YAML configuration parsing | https://pyyaml.org/ | Runtime Python dependency; exact resolution is in `uv.lock`. |
 | PyTorch | 2.6 or later within the locked `<3` range | BSD-3-Clause | Custom U-Net, loss calculation, and plain-PyTorch training loop | https://pytorch.org/ | Runtime dependency. Binary wheels may include separately licensed CUDA components; inspect the exact wheel notices before redistributing a built image. |
 | TorchVision | 0.28.0 | BSD-3-Clause | ResNet-18 architecture and ImageNet-1K pretrained encoder weights | https://pytorch.org/vision/ | Runtime dependency. `ResNet18_Weights.IMAGENET1K_V1` is downloaded from PyTorch's official model host at first use and is not bundled by ScoreRestore. |
+| tqdm | 4.67 or later within the locked `<5` range | MPL-2.0 AND MIT | Terminal progress indicators for generation | https://tqdm.github.io/ | Runtime Python dependency; exact resolution is recorded in `uv.lock`. |
 | pypdfium2 / PDFium | 4.30.0 | BSD-3-Clause | PDF input rasterization adapter | https://pypdfium2.readthedocs.io/ | Runtime dependency. PDF rasterization is input-only in V1; ScoreRestore does not reconstruct output PDFs. |
 | Hatchling | 1.27.0 | MIT | Python package build backend | https://github.com/pypa/hatch | Build-time Python dependency pinned in `pyproject.toml`. |
 | pytest | 8.4.2 | MIT | Test runner | https://pytest.org/ | Development and CI dependency only; exact resolution is in `uv.lock`. |
 | Ruff | 0.16.2 | MIT | Linting and formatting | https://github.com/astral-sh/ruff | Development and CI dependency only; exact resolution is in `uv.lock`. |
 
-## Bundled score assets
+## Bundled score assets and reviewed expansion catalogue
 
 The following unchanged LilyPond source files are distributed as the Milestone 1 starter corpus.
 Their exact source URLs, SHA-256 hashes, composition rights, and source-file rights are recorded in
@@ -34,3 +36,10 @@ Their exact source URLs, SHA-256 hashes, composition rights, and source-file rig
 | Foster, Hard Times Come Again No More LilyPond source | Mutopia-2014/03/24-371 | Public Domain | Voice/lyrics score-source starter asset | https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=371 | Composition, source edition, and contributor typesetting are identified as Public Domain. |
 
 No generated datasets or model weights are committed or distributed with the repository.
+
+`assets/scores/corpus-40.yaml` is a reviewed acquisition catalogue, not a second silently bundled
+asset set. It pins 40 Mutopia paths to commit `2144afd6f52d56c5b6995b8b589ef1268b3139f0`; the
+curation script materializes a separate review directory, verifies source-header public-domain
+markers, and writes per-file hashes before any release promotion. Mutopia’s source repository is
+available at https://github.com/MutopiaProject/MutopiaProject; its contribution guidance explains
+that the music source resides in its `ftp` directory and requires release-rights declarations.

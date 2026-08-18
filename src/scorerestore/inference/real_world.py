@@ -16,6 +16,7 @@ from scorerestore.baselines import clean_classical_variant, load_baseline_config
 
 from .io import read_input_pages
 from .real_world_config import RealWorldComparisonConfig
+from .real_world_quality import quality_row, write_quality_report
 from .tiled import clean, load_checkpoint_model
 
 _LABEL_HEIGHT = 28
@@ -106,6 +107,7 @@ def compare_real_world(
     output.mkdir(parents=True)
     sheets: list[Image.Image] = []
     pages: list[dict[str, Any]] = []
+    quality_rows: list[dict[str, str | int | float | None]] = []
     try:
         for source in sources:
             source_key = _source_key(source, sources)
@@ -136,6 +138,29 @@ def compare_real_world(
                 }
                 for model in config.models:
                     _save_png(results[model.identifier].cleaned, model_paths[model.identifier])
+                quality_rows.append(
+                    quality_row(
+                        page.image,
+                        classical_result.image,
+                        source=str(source.resolve()),
+                        page_number=page.page_number,
+                        comparison_id="classical_cleaned",
+                        comparison_label="OpenCV classical cleaned",
+                    )
+                )
+                for model in config.models:
+                    quality_rows.append(
+                        quality_row(
+                            page.image,
+                            results[model.identifier].cleaned,
+                            source=str(source.resolve()),
+                            page_number=page.page_number,
+                            comparison_id=model.identifier,
+                            comparison_label=model.label,
+                            tile_size=config.tile_size,
+                            overlap=config.overlap,
+                        )
+                    )
                 sheets.append(
                     _comparison_sheet(
                         page.image,
@@ -165,6 +190,7 @@ def compare_real_world(
                 )
         comparison_pdf = output / "comparison.pdf"
         _save_pdf(sheets, comparison_pdf, config.pdf_dpi)
+        quality_report = write_quality_report(output, quality_rows)
         _write_metadata(
             output,
             sources,
@@ -172,6 +198,7 @@ def compare_real_world(
             config,
             selections,
             {identifier: metadata for identifier, (_, metadata) in loaded_models.items()},
+            quality_report,
         )
     finally:
         for sheet in sheets:
@@ -314,12 +341,14 @@ def _write_metadata(
     config: RealWorldComparisonConfig,
     selections: dict[str, CheckpointSelection],
     checkpoint_metadata: dict[str, dict[str, Any]],
+    quality_report: dict[str, str],
 ) -> None:
     metadata = {
         "schema_version": 1,
         "created_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "input_pdfs": [str(path.resolve()) for path in sources],
         "comparison_pdf": "comparison.pdf",
+        "quality_report": quality_report,
         "selection_note": (
             "Automatic selection uses saved training validation loss only and is not a "
             "cross-dataset quality comparison."

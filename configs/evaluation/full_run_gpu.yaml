@@ -1,0 +1,24 @@
+# Docker CUDA full-run evaluation. Checkpoints and data are created by
+# scripts/release/full_run_gpu.sh; paths deliberately use the container mounts.
+dataset_manifest: /data/full-run-gpu/scorerestore-demo-v1/manifests/samples.jsonl
+models:
+  - name: clean_unet
+    checkpoint: /runs/full-run-gpu/training-clean/checkpoints/best.pt
+  - name: multitask_unet
+    checkpoint: /runs/full-run-gpu/training-multitask/checkpoints/best.pt
+  - name: pretrained_resnet18
+    checkpoint: /runs/full-run-gpu/training-resnet18/checkpoints/best.pt
+splits: [validation, test, challenge]
+inference:
+  device: cuda
+  tile_size: 1024
+  overlap: 128
+  pdf_dpi: 300
+  cleaning_threshold: 0.5
+  segmentation_threshold: 0.5
+baseline:
+  config: configs/baseline.yaml
+  variant: otsu
+report:
+  seed: 20260813
+  samples: 8

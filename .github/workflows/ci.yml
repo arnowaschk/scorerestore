@@ -61,3 +61,19 @@ jobs:
         run: docker compose run --rm scorerestore scorerestore --help
       - name: Container environment check
         run: docker compose run --rm scorerestore scorerestore inspect environment
+      - name: Fresh-clone container workflow
+        run: |
+          docker compose run --rm scorerestore scorerestore inspect provenance
+          docker compose run --rm scorerestore scorerestore generate \
+            -c configs/dataset/smoke.yaml --output-root /data/ci-fresh
+          docker compose run --rm scorerestore scorerestore baseline \
+            /data/ci-fresh/scorerestore-smoke-v1/manifests/samples.jsonl \
+            -c configs/baseline.yaml -o /runs/ci-fresh-baseline
+          docker compose run --rm scorerestore scorerestore train \
+            -c configs/training/smoke.yaml -o /runs/ci-fresh-training \
+            --set dataset_manifest=/data/ci-fresh/scorerestore-smoke-v1/manifests/samples.jsonl
+          docker compose run --rm scorerestore sh -ceu '
+            input=$$(find /data/ci-fresh/scorerestore-smoke-v1/inputs -name "*.png" -print -quit)
+            scorerestore infer "$$input" -c configs/inference/default.yaml -o /runs/ci-fresh-inference \
+              --set checkpoint=/runs/ci-fresh-training/checkpoints/best.pt
+          '

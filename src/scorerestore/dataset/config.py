@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import os
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from scorerestore.config import ConfigError, load_config
+from scorerestore.config import ConfigError, apply_overrides, load_config
 
 SPLIT_NAMES = ("train", "validation", "test", "challenge")
 _DATASET_ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9._-]{2,63}$")
@@ -45,6 +46,7 @@ class DatasetGenerationConfig:
     split_weights: dict[str, float]
     degradation_configs: tuple[str, ...]
     challenge_degradation_config: str
+    workers: int
 
     def to_dict(self) -> dict[str, object]:
         """Return a JSON-serializable resolved configuration."""
@@ -68,15 +70,18 @@ class DatasetGenerationConfig:
             "splits": dict(self.split_weights),
             "degradation_configs": list(self.degradation_configs),
             "challenge_degradation_config": self.challenge_degradation_config,
+            "workers": self.workers,
         }
 
 
-def load_dataset_config(path: str | Path) -> DatasetGenerationConfig:
+def load_dataset_config(
+    path: str | Path, *, overrides: tuple[str, ...] = ()
+) -> DatasetGenerationConfig:
     """Load and strictly validate one dataset-generation YAML file."""
 
     config_path = Path(path)
     try:
-        raw = load_config(config_path)
+        raw = apply_overrides(load_config(config_path), overrides)
     except ConfigError as error:
         raise DatasetConfigError(str(error)) from error
     allowed = {
@@ -92,6 +97,7 @@ def load_dataset_config(path: str | Path) -> DatasetGenerationConfig:
         "splits",
         "degradation_configs",
         "challenge_degradation_config",
+        "workers",
     }
     _reject_unknown(raw, allowed, "dataset config")
 
@@ -116,6 +122,7 @@ def load_dataset_config(path: str | Path) -> DatasetGenerationConfig:
     split_weights = _split_weights(raw.get("splits"))
     degradation_configs = _text_list(raw.get("degradation_configs"), "degradation_configs")
     challenge_config = _text(raw, "challenge_degradation_config")
+    workers = _workers(raw.get("workers", "auto"))
     return DatasetGenerationConfig(
         dataset_id=dataset_id,
         seed=seed,
@@ -129,6 +136,7 @@ def load_dataset_config(path: str | Path) -> DatasetGenerationConfig:
         split_weights=split_weights,
         degradation_configs=degradation_configs,
         challenge_degradation_config=challenge_config,
+        workers=workers,
     )
 
 
@@ -144,8 +152,8 @@ def _layout_config(raw: Any) -> LayoutGridConfig:
     }
     _reject_unknown(raw, allowed, "layout")
     staff_sizes = tuple(_number_list(raw.get("staff_sizes"), "layout.staff_sizes"))
-    if any(not 8.0 <= value <= 32.0 for value in staff_sizes):
-        raise DatasetConfigError("layout.staff_sizes must stay within [8, 32]")
+    if any(not 8.0 <= value <= 60.0 for value in staff_sizes):
+        raise DatasetConfigError("layout.staff_sizes must stay within [8, 60]")
     paper_formats = _text_list(raw.get("paper_formats"), "layout.paper_formats")
     if not set(paper_formats) <= {"a4", "letter"}:
         raise DatasetConfigError("layout.paper_formats may contain only a4 and letter")
@@ -204,6 +212,22 @@ def _positive_integer(raw: Mapping[str, Any], field: str) -> int:
     if value < 1:
         raise DatasetConfigError(f"{field} must be positive")
     return value
+
+
+def _workers(raw: Any) -> int:
+    """Resolve ``auto`` to every CPU that the current process may schedule on."""
+
+    if raw == "auto":
+        affinity = getattr(os, "sched_getaffinity", None)
+        try:
+            if affinity is not None:
+                return max(1, len(affinity(0)))
+        except OSError:
+            pass
+        return max(1, os.cpu_count() or 1)
+    if isinstance(raw, bool) or not isinstance(raw, int) or raw < 1:
+        raise DatasetConfigError("workers must be a positive integer or 'auto'")
+    return raw
 
 
 def _number(raw: Mapping[str, Any], field: str) -> float:

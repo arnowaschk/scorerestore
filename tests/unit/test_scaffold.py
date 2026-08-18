@@ -43,8 +43,13 @@ def test_dockerfile_uses_versioned_images() -> None:
     assert f"ARG LILYPOND_SHA256={LILYPOND_LINUX_X86_64_SHA256}" in dockerfile
     assert "COPY --from=lilypond /opt/lilypond-2.26.0" in dockerfile
     assert "COPY assets ./assets" in dockerfile
+    assert "COPY scripts ./scripts" in dockerfile
+    assert "fontconfig fonts-dejavu-core" in dockerfile
+    assert "fc-cache --force" in dockerfile
     assert ":latest" not in dockerfile
     assert "uv sync --frozen --no-dev" in dockerfile
+    assert "uv sync --frozen --no-dev --no-install-project" in dockerfile
+    assert dockerfile.index("COPY src ./src") > dockerfile.index("--no-install-project")
 
 
 def test_private_and_generated_paths_are_ignored() -> None:

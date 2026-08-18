@@ -16,6 +16,7 @@ def test_smoke_config_is_small_and_source_limited() -> None:
     assert config.target_samples == 2
     assert config.source_ids == ("bach-bwv773-invention-02",)
     assert config.dpi == 48
+    assert config.workers >= 1
 
 
 def test_demo_config_defines_temporary_sample_count_and_all_layout_axes() -> None:
@@ -26,6 +27,7 @@ def test_demo_config_defines_temporary_sample_count_and_all_layout_axes() -> Non
     assert set(config.layout.paper_formats) == {"a4", "letter"}
     assert set(config.layout.orientations) == {"portrait", "landscape"}
     assert set(config.split_weights) == {"train", "validation", "test", "challenge"}
+    assert config.workers >= 1
 
     assets = CuratedLilyPondDatasetSource(config.source_manifest).assets()
     assignments = assign_source_splits(
@@ -72,3 +74,14 @@ challenge_degradation_config: random
 
     with pytest.raises(DatasetConfigError, match="splits is missing"):
         load_dataset_config(config_path)
+
+
+def test_dataset_config_accepts_worker_override_and_rejects_zero(tmp_path: Path) -> None:
+    config_path = tmp_path / "workers.yaml"
+    config_path.write_text(
+        (PROJECT_ROOT / "configs/dataset/smoke.yaml").read_text(), encoding="utf-8"
+    )
+
+    assert load_dataset_config(config_path, overrides=("workers=3",)).workers == 3
+    with pytest.raises(DatasetConfigError, match="workers"):
+        load_dataset_config(config_path, overrides=("workers=0",))

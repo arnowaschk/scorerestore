@@ -18,3 +18,4 @@ splits:
   challenge: 1.0
 degradation_configs: [medium]
 challenge_degradation_config: random
+workers: auto

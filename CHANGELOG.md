@@ -31,6 +31,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Real-world PDF comparison command with automatic local custom-U-Net/ResNet-18 checkpoint
   selection, checkpoint-selection provenance, native-resolution cleaned PNG outputs, and YAML
   configurable, ordered original/classical/neural landscape panels per input page.
+- Public-V1 release documentation: architecture, dataset/provenance, benchmarks, model card,
+  roadmap, demo-checkpoint workflow, fresh-clone Compose gate, and a pinned/reviewable 40-source
+  Mutopia curation catalogue that materializes into a strict hash-checked manifest.
 
 ## [0.1.0] - 2026-08-11
 

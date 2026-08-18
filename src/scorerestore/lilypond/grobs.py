@@ -11,6 +11,8 @@ from __future__ import annotations
 from types import MappingProxyType
 from typing import Literal, TypeAlias
 
+from .grob_catalog import LILYPOND_2_26_DOCUMENTED_GROBS
+
 SemanticForegroundClass: TypeAlias = Literal["staff", "notation", "text"]
 
 _STAFF_GROBS = {
@@ -93,6 +95,7 @@ _NOTATION_GROBS = {
     "MultiMeasureRest",
     "MultiMeasureRestNumber",
     "MultiMeasureRestScript",
+    "MultiMeasureRestText",
     "NonMusicalPaperColumn",
     "NoteCollision",
     "NoteColumn",
@@ -108,6 +111,7 @@ _NOTATION_GROBS = {
     "RestCollision",
     "Script",
     "ScriptColumn",
+    "ScriptRow",
     "Slur",
     "SostenutoPedal",
     "SostenutoPedalLineSpanner",
@@ -142,7 +146,7 @@ _NOTATION_GROBS = {
     "VerticalAxisGroup",
     "VoltaBracket",
     "VoltaBracketSpanner",
-}
+} | (LILYPOND_2_26_DOCUMENTED_GROBS - _STAFF_GROBS - _TEXT_GROBS)
 
 GROB_CLASS_REGISTRY = MappingProxyType(
     {

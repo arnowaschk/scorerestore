@@ -33,6 +33,19 @@ from scorerestore.lilypond.masks import (
 _VERSION_PATTERN = re.compile(r"GNU LilyPond ([0-9]+\.[0-9]+\.[0-9]+)")
 _UNKNOWN_GROB_PATTERN = re.compile(r"SCORERESTORE_UNKNOWN_GROB:([A-Za-z0-9_-]+)")
 _PAGE_NUMBER_PATTERN = re.compile(r"-page([0-9]+)\.png$")
+_LEGACY_UNBRACED_NEW_CONTEXT_PATTERN = re.compile(
+    r"^(?P<indent>[ \t]*)(?P<context_command>\\new[ \t]+"
+    r'[A-Za-z][A-Za-z0-9_-]*[ \t]*=[ \t]*"(?:[^"\\]|\\.)*")'
+    r"(?P<trailing>[ \t]*(?:%[^\n]*)?)$",
+    re.MULTILINE,
+)
+_LEGACY_LAYOUT_CONTEXT_PATTERN = re.compile(
+    r"^(?P<indent>[ \t]*)\\context[ \t]+(?P<name>[A-Za-z][A-Za-z0-9_-]*)"
+    r"(?P<trailing>[ \t]*(?:%[^\n]*)?)$",
+    re.MULTILINE,
+)
+_LAYOUT_OPEN_PATTERN = re.compile(r"\\layout[ \t\r\n]*\{")
+_INCLUDE_PATTERN = re.compile(r'\\include\s+"([^"\\]+)"')
 
 
 class LilyPondRenderError(RuntimeError):
@@ -52,8 +65,8 @@ class LilyPondLayoutConfig:
     right_margin_mm: float
 
     def __post_init__(self) -> None:
-        if not 8.0 <= self.staff_size <= 32.0:
-            raise ValueError("staff_size must be within the modest V1 range [8, 32]")
+        if not 8.0 <= self.staff_size <= 60.0:
+            raise ValueError("staff_size must be within the modest V1 range [8, 60]")
         if self.paper_format not in {"a4", "letter"}:
             raise ValueError("paper_format must be 'a4' or 'letter'")
         if self.orientation not in {"portrait", "landscape"}:
@@ -133,6 +146,16 @@ class LilyPondRenderResult:
     lilypond_version: str
     unknown_grobs: tuple[str, ...]
     pages: tuple[RenderedMaskPage, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class LilyPondPreflightResult:
+    """Successful compatibility preflight for one source, without page materialization."""
+
+    source_path: Path
+    source_sha256: str
+    lilypond_version: str
+    unknown_grobs: tuple[str, ...]
 
 
 def detect_lilypond_version(binary: str | Path = "lilypond") -> str:
@@ -259,19 +282,109 @@ def render_score(
     )
 
 
+def preflight_score(
+    source: str | Path,
+    *,
+    config: LilyPondRenderConfig | None = None,
+    expected_source_sha256: str | None = None,
+) -> LilyPondPreflightResult:
+    """Check that one source converts and engraves with the configured LilyPond.
+
+    This executes the same conversion and semantic-grob wrapper as ``render_score``
+    but suppresses page output.  It is deliberately intended for a fast, complete
+    source-corpus compatibility check before expensive dataset generation.
+    """
+
+    render_config = config or LilyPondRenderConfig()
+    source_path = Path(source).resolve()
+    if not source_path.is_file():
+        raise LilyPondRenderError(f"LilyPond source does not exist: {source_path}")
+    if source_path.suffix != ".ly":
+        raise LilyPondRenderError(f"LilyPond source must use the .ly suffix: {source_path}")
+
+    lilypond_version = detect_lilypond_version(render_config.lilypond_binary)
+    if lilypond_version != LILYPOND_VERSION:
+        raise LilyPondRenderError(
+            f"LilyPond version mismatch: expected {LILYPOND_VERSION}, got {lilypond_version}"
+        )
+    source_sha256 = _sha256_file(source_path)
+    if expected_source_sha256 is not None and source_sha256 != expected_source_sha256:
+        raise LilyPondRenderError(
+            f"source SHA-256 mismatch: expected {expected_source_sha256}, got {source_sha256}"
+        )
+
+    with tempfile.TemporaryDirectory(prefix="scorerestore-lilypond-preflight-") as temporary:
+        work_directory = Path(temporary) / "work"
+        work_directory.mkdir()
+        converted_source = _convert_source(source_path, work_directory, render_config)
+        wrapper = work_directory / "preflight.ly"
+        wrapper.write_text(
+            _wrapper_source("pristine", converted_source, render_config.layout), encoding="utf-8"
+        )
+        output = _run_lilypond(
+            wrapper,
+            work_directory / "preflight",
+            source_path.parent,
+            render_config,
+            no_print_pages=True,
+        )
+    unknown_grobs = set(_UNKNOWN_GROB_PATTERN.findall(output))
+    if render_config.strict_unknown_grobs and unknown_grobs:
+        names = ", ".join(sorted(unknown_grobs))
+        raise LilyPondRenderError(f"strict unknown-grob validation failed: {names}")
+    return LilyPondPreflightResult(
+        source_path=source_path,
+        source_sha256=source_sha256,
+        lilypond_version=lilypond_version,
+        unknown_grobs=tuple(sorted(unknown_grobs)),
+    )
+
+
 def _convert_source(
     source_path: Path,
     work_directory: Path,
     config: LilyPondRenderConfig,
 ) -> Path:
+    converted_root = work_directory / "converted"
+    converted_root.mkdir()
+    convert_binary = _convert_binary(config)
+    source_root = source_path.parent.resolve()
+    pending = [source_path]
+    converted: set[Path] = set()
+    while pending:
+        current_source = pending.pop()
+        if current_source in converted:
+            continue
+        converted.add(current_source)
+        source_text = current_source.read_text(encoding="utf-8")
+        for include in _INCLUDE_PATTERN.findall(source_text):
+            included = (current_source.parent / include).resolve()
+            if included.is_file() and _is_within(included, source_root):
+                pending.append(included)
+
+        converted_text = _convert_file(current_source, convert_binary, config)
+        destination = converted_root / current_source.relative_to(source_root)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(_repair_lilypond_compatibility(converted_text), encoding="utf-8")
+    return converted_root / source_path.name
+
+
+def _convert_binary(config: LilyPondRenderConfig) -> Path:
     lilypond_binary = Path(config.lilypond_binary)
     convert_binary = lilypond_binary.with_name("convert-ly")
-    if not convert_binary.exists():
-        located = shutil.which("convert-ly")
-        if located is None:
-            raise LilyPondRenderError("convert-ly was not found beside LilyPond or on PATH")
-        convert_binary = Path(located)
+    if convert_binary.exists():
+        return convert_binary
+    located = shutil.which("convert-ly")
+    if located is None:
+        raise LilyPondRenderError("convert-ly was not found beside LilyPond or on PATH")
+    return Path(located)
 
+
+def _convert_file(
+    source_path: Path,
+    convert_binary: Path,
+    config: LilyPondRenderConfig,
+) -> str:
     try:
         completed = subprocess.run(
             [str(convert_binary), "--current-version", str(source_path)],
@@ -286,10 +399,151 @@ def _convert_source(
     if completed.returncode != 0 or not completed.stdout.strip():
         detail = completed.stderr.strip() or "convert-ly produced no source"
         raise LilyPondRenderError(f"convert-ly failed for {source_path}: {detail}")
+    return completed.stdout
 
-    converted_source = work_directory / "converted-source.ly"
-    converted_source.write_text(completed.stdout, encoding="utf-8")
-    return converted_source
+
+def _is_within(path: Path, directory: Path) -> bool:
+    """Return whether a resolved included source is contained in its score tree."""
+
+    try:
+        path.relative_to(directory)
+    except ValueError:
+        return False
+    return True
+
+
+def _repair_lilypond_compatibility(source: str) -> str:
+    """Apply narrow structural repairs absent from ``convert-ly`` output."""
+
+    return _repair_legacy_layout_contexts(_repair_legacy_unbraced_new_contexts(source))
+
+
+def _repair_legacy_unbraced_new_contexts(source: str) -> str:
+    """Give legacy ``\\new Context = \"id\"`` declarations an explicit music body.
+
+    LilyPond 2.26 requires a music expression immediately after a named ``\\new``
+    context.  Some older Mutopia sources rely on the pre-2.19 shorthand where the
+    rest of the enclosing music block is implicitly the context body.  ``convert-ly``
+    updates many older syntaxes but deliberately leaves this structural shorthand
+    unchanged.  Repair it only in our temporary converted copy, preserving source
+    files and their provenance hashes byte-for-byte.
+    """
+
+    matches = tuple(_LEGACY_UNBRACED_NEW_CONTEXT_PATTERN.finditer(source))
+    if not matches:
+        return source
+
+    brace_pairs = _lilypond_brace_pairs(source)
+    insertions: list[tuple[int, str]] = []
+    for match in matches:
+        enclosing = _enclosing_brace(match.start(), brace_pairs)
+        if enclosing is None:
+            raise LilyPondRenderError(
+                "cannot repair legacy unbraced \\new context outside a music block"
+            )
+        _, closing_brace = enclosing
+        close_line_start = source.rfind("\n", 0, closing_brace) + 1
+        if source[close_line_start:closing_brace].strip():
+            raise LilyPondRenderError(
+                "cannot repair legacy unbraced \\new context with an inline closing brace"
+            )
+        insertions.append((match.start("trailing"), " {"))
+        insertions.append((close_line_start, f"{match.group('indent')}}}\n"))
+
+    repaired = source
+    for position, text in sorted(insertions, key=lambda item: item[0], reverse=True):
+        repaired = f"{repaired[:position]}{text}{repaired[position:]}"
+    return repaired
+
+
+def _repair_legacy_layout_contexts(source: str) -> str:
+    """Turn legacy ``\\context Staff`` layout declarations into modern blocks.
+
+    In a ``\\layout`` block, LilyPond 2.26 requires ``\\context { \\Staff ... }``.
+    Older sources used ``\\context Staff`` followed by overrides until the end of
+    the layout block.  This function adapts that exact shorthand in the temporary
+    converted source only.
+    """
+
+    brace_pairs = _lilypond_brace_pairs(source)
+    layout_blocks: dict[int, int] = {}
+    for match in _LAYOUT_OPEN_PATTERN.finditer(source):
+        opening = match.end() - 1
+        closing = brace_pairs.get(opening)
+        if closing is not None:
+            layout_blocks[opening] = closing
+    if not layout_blocks:
+        return source
+
+    replacements: list[tuple[int, int, str]] = []
+    for match in _LEGACY_LAYOUT_CONTEXT_PATTERN.finditer(source):
+        enclosing = _enclosing_brace(match.start(), layout_blocks)
+        if enclosing is None:
+            continue
+        _, closing_brace = enclosing
+        close_line_start = source.rfind("\n", 0, closing_brace) + 1
+        if source[close_line_start:closing_brace].strip():
+            raise LilyPondRenderError(
+                "cannot repair legacy layout context with an inline closing brace"
+            )
+        replacement = (
+            f"{match.group('indent')}\\context {{{match.group('trailing')}\n"
+            f"{match.group('indent')}  \\{match.group('name')}"
+        )
+        replacements.append((match.start(), match.end(), replacement))
+        replacements.append((close_line_start, close_line_start, f"{match.group('indent')}}}\n"))
+
+    repaired = source
+    for start, end, text in sorted(replacements, key=lambda item: item[0], reverse=True):
+        repaired = f"{repaired[:start]}{text}{repaired[end:]}"
+    return repaired
+
+
+def _lilypond_brace_pairs(source: str) -> dict[int, int]:
+    """Return matching unescaped brace positions, ignoring strings and comments."""
+
+    pairs: dict[int, int] = {}
+    openings: list[int] = []
+    in_string = False
+    escaped = False
+    in_comment = False
+    for position, character in enumerate(source):
+        if in_comment:
+            if character == "\n":
+                in_comment = False
+            continue
+        if in_string:
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == '"':
+                in_string = False
+            continue
+        if escaped:
+            escaped = False
+        elif character == "\\":
+            escaped = True
+        elif character == "%":
+            in_comment = True
+        elif character == '"':
+            in_string = True
+        elif character == "{":
+            openings.append(position)
+        elif character == "}" and openings:
+            pairs[openings.pop()] = position
+    return pairs
+
+
+def _enclosing_brace(position: int, brace_pairs: dict[int, int]) -> tuple[int, int] | None:
+    """Find the innermost matched brace pair enclosing *position*."""
+
+    candidates = [
+        (opening, closing)
+        for opening, closing in brace_pairs.items()
+        if opening < position < closing
+    ]
+    return max(candidates, default=None, key=lambda pair: pair[0])
 
 
 def _render_passes(
@@ -408,19 +662,29 @@ def _run_lilypond(
     output_prefix: Path,
     source_include_directory: Path,
     config: LilyPondRenderConfig,
+    *,
+    no_print_pages: bool = False,
 ) -> str:
-    command = [
-        str(config.lilypond_binary),
-        "--png",
-        f"-dresolution={config.dpi}",
-        "-danti-alias-factor=1",
-        "--loglevel=INFO",
-        "-I",
-        str(source_include_directory),
-        "-o",
-        str(output_prefix),
-        str(wrapper),
-    ]
+    command = [str(config.lilypond_binary), "--loglevel=INFO"]
+    if no_print_pages:
+        command.append("-dno-print-pages")
+    else:
+        command.extend(
+            [
+                "--png",
+                f"-dresolution={config.dpi}",
+                "-danti-alias-factor=1",
+            ]
+        )
+    command.extend(
+        [
+            "-I",
+            str(source_include_directory),
+            "-o",
+            str(output_prefix),
+            str(wrapper),
+        ]
+    )
     try:
         completed = subprocess.run(
             command,

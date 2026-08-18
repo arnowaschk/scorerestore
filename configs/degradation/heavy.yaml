@@ -17,5 +17,5 @@ stains:
   enabled: true
   opacity: [0.12, 0.30]
   blob_count: [5, 14]
-  blob_radius_fraction: [0.010, 0.045]
+  blob_radius_fraction: [0.010, 0.075]
   speckle_density: [0.00025, 0.00080]

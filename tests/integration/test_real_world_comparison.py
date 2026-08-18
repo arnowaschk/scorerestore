@@ -57,6 +57,20 @@ def test_compare_real_world_auto_selects_models_and_preserves_full_resolution(
         "Custom model cleaned",
     ]
     assert len(metadata["pages"]) == 2
+    assert metadata["quality_report"] == {
+        "metrics_csv": "quality_metrics.csv",
+        "summary_json": "quality_summary.json",
+        "report_markdown": "quality_report.md",
+    }
+    quality_rows = (output / "quality_metrics.csv").read_text(encoding="utf-8").splitlines()
+    # Two pages, classical output, and the two YAML model panels.
+    assert len(quality_rows) == 1 + 2 * 3
+    quality_summary = json.loads((output / "quality_summary.json").read_text(encoding="utf-8"))
+    assert len(quality_summary["per_source"]) == 3
+    assert len(quality_summary["overall"]) == 3
+    report = (output / "quality_report.md").read_text(encoding="utf-8")
+    assert "## Per-page comparison panels" in report
+    assert "## Whole input-directory summary" in report
     for page_number in (1, 2):
         for directory in ("original", "classical_cleaned", "resnet_cleaned", "model_cleaned"):
             page = output / directory / "example" / f"page-{page_number:04d}.png"

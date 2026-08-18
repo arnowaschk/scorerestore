@@ -26,10 +26,26 @@ COPY --from=lilypond /opt/lilypond-2.26.0 /opt/lilypond-2.26.0
 
 WORKDIR /app
 
-COPY pyproject.toml uv.lock README.md LICENSE THIRD_PARTY_NOTICES.md ./
+# Some curated Mutopia sources explicitly request DejaVu Sans for their public-domain notice
+# markup, including U+01C0. Keep that requested glyph available instead of falling back to a
+# bundled LilyPond Nimbus font that lacks it. Source files remain byte-for-byte untouched.
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends fontconfig fonts-dejavu-core \
+    && fc-cache --force \
+    && rm -rf /var/lib/apt/lists/*
+
+# Keep the large, locked third-party environment independent of application files. In particular,
+# a source/config/documentation edit must not force PyTorch and TorchVision to be downloaded,
+# unpacked, and exported again. The project itself is installed after its sources are present in
+# the next, intentionally small layer.
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev --no-install-project
+
+COPY README.md LICENSE THIRD_PARTY_NOTICES.md ./
 COPY assets ./assets
 COPY configs ./configs
 COPY src ./src
+COPY scripts ./scripts
 
 RUN uv sync --frozen --no-dev
 

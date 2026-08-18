@@ -213,6 +213,14 @@ def build_parser() -> argparse.ArgumentParser:
     generation.add_argument("-c", "--config", type=Path, required=True)
     generation.add_argument("--output-root", type=Path, default=Path("data/generated"))
     generation.add_argument(
+        "--set",
+        dest="overrides",
+        action="append",
+        default=[],
+        metavar="FIELD=VALUE",
+        help="override a YAML field using dotted paths; repeat as needed",
+    )
+    generation.add_argument(
         "--lilypond", default="lilypond", help="LilyPond executable (default: lilypond)"
     )
     generation.set_defaults(command_path="generate", handler=_generate_dataset)
@@ -475,11 +483,12 @@ def _write_degradation_artifacts(
 
 def _generate_dataset(args: argparse.Namespace) -> int:
     try:
-        config = load_dataset_config(args.config)
+        config = load_dataset_config(args.config, overrides=tuple(args.overrides))
         result = generate_dataset(
             config,
             output_root=args.output_root,
             lilypond_binary=args.lilypond,
+            progress=True,
         )
     except (
         DatasetConfigError,
@@ -492,7 +501,8 @@ def _generate_dataset(args: argparse.Namespace) -> int:
         return 1
     counts = ", ".join(f"{name}={count}" for name, count in result.split_counts.items())
     print(
-        f"Generated {result.sample_count} sample(s) at {result.dataset_directory}; "
+        f"Generated {result.sample_count} sample(s) with {config.workers} CPU worker(s) at "
+        f"{result.dataset_directory}; "
         f"splits: {counts}; manifest: {result.manifest_path}"
     )
     return 0

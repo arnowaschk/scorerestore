@@ -9,7 +9,8 @@ import platform
 import random
 import shutil
 import tempfile
-from dataclasses import dataclass
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from itertools import product
 from pathlib import Path
@@ -18,10 +19,16 @@ from typing import Any
 import numpy as np
 import PIL
 from PIL import Image
+from tqdm import tqdm
 
 from scorerestore import __version__
 from scorerestore.degradation import DegradationConfig, degrade, resolve_degradation_config
-from scorerestore.lilypond import LilyPondLayoutConfig, LilyPondRenderConfig, render_score
+from scorerestore.lilypond import (
+    LilyPondLayoutConfig,
+    LilyPondRenderConfig,
+    LilyPondRenderError,
+    render_score,
+)
 from scorerestore.lilypond.constants import LILYPOND_VERSION
 from scorerestore.lilypond.renderer import detect_lilypond_version
 from scorerestore.provenance import RightsRecord, ScoreAsset, validate_score_manifest
@@ -54,6 +61,7 @@ class DatasetGenerationResult:
     metadata_path: Path
     sample_count: int
     split_counts: dict[str, int]
+    skipped_page_count: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,11 +91,45 @@ class _RenderedCandidate:
     mask_sha256: dict[str, str]
 
 
+@dataclass(slots=True)
+class _ProgressReporter:
+    """Drive a frequently refreshed tqdm indicator for a parallel generation phase."""
+
+    label: str
+    total: int
+    enabled: bool
+    _bar: Any | None = field(default=None, init=False)
+
+    def start(self) -> None:
+        if self.enabled:
+            self._bar = tqdm(
+                total=self.total,
+                desc=self.label,
+                unit="task",
+                dynamic_ncols=True,
+                mininterval=1.0,
+                smoothing=0.15,
+            )
+
+    def advance(self) -> None:
+        if self._bar is not None:
+            self._bar.update()
+
+    def close(self) -> None:
+        if self._bar is not None:
+            self._bar.close()
+
+    def message(self, text: str) -> None:
+        if self.enabled:
+            tqdm.write(text)
+
+
 def generate_dataset(
     config: DatasetGenerationConfig,
     *,
     output_root: str | Path = "data/generated",
     lilypond_binary: str | Path = "lilypond",
+    progress: bool = False,
 ) -> DatasetGenerationResult:
     """Render, degrade, and atomically materialize one configured V1 dataset."""
 
@@ -137,21 +179,26 @@ def generate_dataset(
             ".render-cache",
         ):
             storage.make_directory(directory)
-        candidates = _render_candidates(
+        candidates, skipped_pages = _render_candidates(
             assets,
             assignments=assignments,
             config=config,
             storage=storage,
             lilypond_binary=lilypond_binary,
+            workers=config.workers,
+            progress=progress,
         )
         if not candidates:
             raise DatasetGenerationError("LilyPond rendering produced no candidate pages")
+        storage.write_text("reports/skipped_pages.json", _json_text(skipped_pages))
         records = _materialize_samples(
             candidates,
             config=config,
             storage=storage,
             degradation_configs=degradation_configs,
             challenge_config=challenge_config,
+            workers=config.workers,
+            progress=progress,
         )
         manifest_text = "".join(
             json.dumps(record, sort_keys=True, ensure_ascii=False) + "\n" for record in records
@@ -166,6 +213,7 @@ def generate_dataset(
             sample_count=len(records),
             split_counts=split_counts,
             source_manifest=source_manifest,
+            skipped_page_count=len(skipped_pages),
         )
         storage.write_text("manifests/dataset.json", _json_text(metadata))
         shutil.rmtree(storage.path(".render-cache"))
@@ -181,6 +229,7 @@ def generate_dataset(
         metadata_path=final_directory / "manifests/dataset.json",
         sample_count=len(records),
         split_counts=split_counts,
+        skipped_page_count=len(skipped_pages),
     )
 
 
@@ -294,63 +343,140 @@ def _render_candidates(
     config: DatasetGenerationConfig,
     storage: FilesystemStorage,
     lilypond_binary: str | Path,
-) -> list[_RenderedCandidate]:
-    candidates: list[_RenderedCandidate] = []
-    for asset in assets:
-        for layout_seed, layout in _layout_variants(asset.id, config):
-            render_parameters = {
-                **layout.to_dict(),
-                "layout_seed": layout_seed,
-                "dpi": config.dpi,
-                "mask_threshold": config.mask_threshold,
-                "strict_unknown_grobs": config.strict_unknown_grobs,
+    workers: int,
+    progress: bool,
+) -> tuple[list[_RenderedCandidate], list[dict[str, object]]]:
+    tasks = [
+        (asset, layout_seed, layout)
+        for asset in assets
+        for layout_seed, layout in _layout_variants(asset.id, config)
+    ]
+    reporter = _ProgressReporter(
+        f"Rendering {len(tasks)} source/layout task(s) with {min(workers, len(tasks))} worker(s)",
+        len(tasks),
+        progress,
+    )
+    reporter.start()
+    completed_candidates: list[tuple[list[_RenderedCandidate], list[dict[str, object]]] | None] = [
+        None
+    ] * len(tasks)
+    try:
+        with ThreadPoolExecutor(
+            max_workers=min(workers, len(tasks)), thread_name_prefix="render"
+        ) as pool:
+            futures = {
+                pool.submit(
+                    _render_candidate,
+                    asset,
+                    assignments[asset.id],
+                    layout_seed,
+                    layout,
+                    config,
+                    storage,
+                    lilypond_binary,
+                ): index
+                for index, (asset, layout_seed, layout) in enumerate(tasks)
             }
-            render_id = _stable_id(
-                "render", {"source_sha256": asset.source_sha256, **render_parameters}
+            for future in as_completed(futures):
+                completed_candidates[futures[future]] = future.result()
+                reporter.advance()
+    finally:
+        reporter.close()
+    candidates: list[_RenderedCandidate] = []
+    skipped_pages: list[dict[str, object]] = []
+    for result in completed_candidates:
+        if result is not None:
+            candidates.extend(result[0])
+            skipped_pages.extend(result[1])
+    if skipped_pages:
+        reporter.message(
+            f"Skipped {len(skipped_pages)} non-trainable rendered page(s); "
+            "see reports/skipped_pages.json"
+        )
+    return candidates, skipped_pages
+
+
+def _render_candidate(
+    asset: ScoreAsset,
+    split: str,
+    layout_seed: int,
+    layout: LilyPondLayoutConfig,
+    config: DatasetGenerationConfig,
+    storage: FilesystemStorage,
+    lilypond_binary: str | Path,
+) -> tuple[list[_RenderedCandidate], list[dict[str, object]]]:
+    """Render one independent source/layout task; safe to run alongside other tasks."""
+
+    render_parameters = {
+        **layout.to_dict(),
+        "layout_seed": layout_seed,
+        "dpi": config.dpi,
+        "mask_threshold": config.mask_threshold,
+        "strict_unknown_grobs": config.strict_unknown_grobs,
+    }
+    render_id = _stable_id("render", {"source_sha256": asset.source_sha256, **render_parameters})
+    try:
+        result = render_score(
+            asset.source_path,
+            storage.path(f".render-cache/{render_id}"),
+            config=LilyPondRenderConfig(
+                lilypond_binary=lilypond_binary,
+                dpi=config.dpi,
+                mask_threshold=config.mask_threshold,
+                strict_unknown_grobs=config.strict_unknown_grobs,
+                expected_nonempty=(),
+                layout=layout,
+            ),
+            expected_source_sha256=asset.source_sha256,
+        )
+    except LilyPondRenderError as error:
+        raise DatasetGenerationError(
+            f"render failed for source {asset.id}, layout seed {layout_seed}: {error}"
+        ) from error
+    storage.copy_file(result.metadata_path, f"reports/renders/{render_id}.json")
+    candidates: list[_RenderedCandidate] = []
+    skipped_pages: list[dict[str, object]] = []
+    for page in result.pages:
+        missing_masks = _missing_trainable_masks(page.mask_paths)
+        if missing_masks:
+            skipped_pages.append(
+                {
+                    "source_id": asset.id,
+                    "render_id": render_id,
+                    "page": page.page,
+                    "layout_seed": layout_seed,
+                    "missing_masks": missing_masks,
+                }
             )
-            render_directory = storage.path(f".render-cache/{render_id}")
-            result = render_score(
-                asset.source_path,
-                render_directory,
-                config=LilyPondRenderConfig(
-                    lilypond_binary=lilypond_binary,
-                    dpi=config.dpi,
-                    mask_threshold=config.mask_threshold,
-                    strict_unknown_grobs=config.strict_unknown_grobs,
-                    layout=layout,
-                ),
-                expected_source_sha256=asset.source_sha256,
+            continue
+        page_stem = f"{render_id}-p{page.page:03d}"
+        clean_path = f"clean/{page_stem}.png"
+        storage.copy_file(page.pristine_path, clean_path)
+        mask_paths: dict[str, str] = {}
+        mask_hashes: dict[str, str] = {}
+        for name in ("background", "staff", "notation", "text"):
+            mask_path = f"masks/{name}/{page_stem}.png"
+            copied = storage.copy_file(page.mask_paths[name], mask_path)
+            mask_paths[name] = mask_path
+            mask_hashes[name] = sha256_file(copied)
+        storage.copy_file(page.qa_panel_path, f"reports/qa/{page_stem}.png")
+        candidates.append(
+            _RenderedCandidate(
+                asset=asset,
+                split=split,
+                render_id=render_id,
+                page=page.page,
+                width=page.width,
+                height=page.height,
+                layout_seed=layout_seed,
+                render_parameters=render_parameters,
+                clean_path=clean_path,
+                clean_sha256=sha256_file(storage.path(clean_path)),
+                mask_paths=mask_paths,
+                mask_sha256=mask_hashes,
             )
-            storage.copy_file(result.metadata_path, f"reports/renders/{render_id}.json")
-            for page in result.pages:
-                page_stem = f"{render_id}-p{page.page:03d}"
-                clean_path = f"clean/{page_stem}.png"
-                storage.copy_file(page.pristine_path, clean_path)
-                mask_paths: dict[str, str] = {}
-                mask_hashes: dict[str, str] = {}
-                for name in ("background", "staff", "notation", "text"):
-                    mask_path = f"masks/{name}/{page_stem}.png"
-                    copied = storage.copy_file(page.mask_paths[name], mask_path)
-                    mask_paths[name] = mask_path
-                    mask_hashes[name] = sha256_file(copied)
-                storage.copy_file(page.qa_panel_path, f"reports/qa/{page_stem}.png")
-                candidates.append(
-                    _RenderedCandidate(
-                        asset=asset,
-                        split=assignments[asset.id],
-                        render_id=render_id,
-                        page=page.page,
-                        width=page.width,
-                        height=page.height,
-                        layout_seed=layout_seed,
-                        render_parameters=render_parameters,
-                        clean_path=clean_path,
-                        clean_sha256=sha256_file(storage.path(clean_path)),
-                        mask_paths=mask_paths,
-                        mask_sha256=mask_hashes,
-                    )
-                )
-    return candidates
+        )
+    return candidates, skipped_pages
 
 
 def _materialize_samples(
@@ -360,11 +486,13 @@ def _materialize_samples(
     storage: FilesystemStorage,
     degradation_configs: tuple[DegradationConfig, ...],
     challenge_config: DegradationConfig,
+    workers: int,
+    progress: bool,
 ) -> list[dict[str, Any]]:
     rng = random.Random(config.seed)
     rng.shuffle(candidates)
     created_at = datetime.now(UTC).isoformat().replace("+00:00", "Z")
-    records: list[dict[str, Any]] = []
+    tasks: list[tuple[_RenderedCandidate, DegradationConfig, int, str]] = []
     seen_sample_ids: set[str] = set()
     for sample_index in range(config.target_samples):
         candidate = candidates[sample_index % len(candidates)]
@@ -383,58 +511,100 @@ def _materialize_samples(
         if sample_id in seen_sample_ids:
             raise DatasetGenerationError(f"stable sample ID collision: {sample_id}")
         seen_sample_ids.add(sample_id)
-        with Image.open(storage.path(candidate.clean_path)) as opened:
-            clean = opened.copy()
-        degraded = degrade(clean, config=selected_config, seed=sample_seed)
-        input_path = f"inputs/{sample_id}.png"
-        input_file = storage.write_bytes(input_path, _png_bytes(degraded.image))
-        recipe = dict(degraded.recipe)
-        recipe["dataset"] = {
-            "dataset_id": config.dataset_id,
-            "sample_id": sample_id,
-            "source_id": candidate.asset.id,
-            "render_id": candidate.render_id,
-            "page": candidate.page,
-            "split": candidate.split,
-        }
-        recipe_path = f"manifests/recipes/{sample_id}.json"
-        recipe_file = storage.write_text(recipe_path, _json_text(recipe))
-        record = {
-            "schema_version": DATASET_MANIFEST_SCHEMA_VERSION,
-            "sample_id": sample_id,
-            "dataset_id": config.dataset_id,
-            "source_id": candidate.asset.id,
-            "source_path": candidate.asset.source_file,
-            "source_sha256": candidate.asset.source_sha256,
-            "source_license_status": candidate.asset.source_file_rights.status,
-            "source_provenance": _source_provenance(candidate.asset),
-            "page": candidate.page,
-            "split": candidate.split,
-            "generator_version": __version__,
-            "dataset_generator_schema_version": DATASET_GENERATOR_SCHEMA_VERSION,
-            "lilypond_version": LILYPOND_VERSION,
-            "seed": sample_seed,
-            "render_id": candidate.render_id,
-            "render_parameters": candidate.render_parameters,
-            "degradation_preset": selected_config.preset,
-            "degradation_config": selected_config.to_dict(),
-            "degradations": degraded.recipe["operations"],
-            "input_path": input_path,
-            "clean_target_path": candidate.clean_path,
-            "mask_paths": candidate.mask_paths,
-            "recipe_path": recipe_path,
-            "hashes": {
-                "input": sha256_file(input_file),
-                "clean": candidate.clean_sha256,
-                "recipe": sha256_file(recipe_file),
-                **{f"mask_{name}": digest for name, digest in candidate.mask_sha256.items()},
-            },
-            "dimensions": {"width": candidate.width, "height": candidate.height},
-            "dpi": config.dpi,
-            "created_at": created_at,
-        }
-        records.append(record)
-    return records
+        tasks.append((candidate, selected_config, sample_seed, sample_id))
+    reporter = _ProgressReporter(
+        f"Degrading and writing {len(tasks)} sample(s) with {min(workers, len(tasks))} worker(s)",
+        len(tasks),
+        progress,
+    )
+    reporter.start()
+    records: list[dict[str, Any] | None] = [None] * len(tasks)
+    try:
+        with ThreadPoolExecutor(
+            max_workers=min(workers, len(tasks)), thread_name_prefix="degrade"
+        ) as pool:
+            futures = {
+                pool.submit(
+                    _materialize_sample,
+                    candidate,
+                    selected_config,
+                    sample_seed,
+                    sample_id,
+                    config,
+                    storage,
+                    created_at,
+                ): index
+                for index, (candidate, selected_config, sample_seed, sample_id) in enumerate(tasks)
+            }
+            for future in as_completed(futures):
+                records[futures[future]] = future.result()
+                reporter.advance()
+    finally:
+        reporter.close()
+    return [record for record in records if record is not None]
+
+
+def _materialize_sample(
+    candidate: _RenderedCandidate,
+    selected_config: DegradationConfig,
+    sample_seed: int,
+    sample_id: str,
+    config: DatasetGenerationConfig,
+    storage: FilesystemStorage,
+    created_at: str,
+) -> dict[str, Any]:
+    """Create one deterministic degradation/materialization task concurrently."""
+
+    with Image.open(storage.path(candidate.clean_path)) as opened:
+        clean = opened.copy()
+    degraded = degrade(clean, config=selected_config, seed=sample_seed)
+    input_path = f"inputs/{sample_id}.png"
+    input_file = storage.write_bytes(input_path, _png_bytes(degraded.image))
+    recipe = dict(degraded.recipe)
+    recipe["dataset"] = {
+        "dataset_id": config.dataset_id,
+        "sample_id": sample_id,
+        "source_id": candidate.asset.id,
+        "render_id": candidate.render_id,
+        "page": candidate.page,
+        "split": candidate.split,
+    }
+    recipe_path = f"manifests/recipes/{sample_id}.json"
+    recipe_file = storage.write_text(recipe_path, _json_text(recipe))
+    return {
+        "schema_version": DATASET_MANIFEST_SCHEMA_VERSION,
+        "sample_id": sample_id,
+        "dataset_id": config.dataset_id,
+        "source_id": candidate.asset.id,
+        "source_path": candidate.asset.source_file,
+        "source_sha256": candidate.asset.source_sha256,
+        "source_license_status": candidate.asset.source_file_rights.status,
+        "source_provenance": _source_provenance(candidate.asset),
+        "page": candidate.page,
+        "split": candidate.split,
+        "generator_version": __version__,
+        "dataset_generator_schema_version": DATASET_GENERATOR_SCHEMA_VERSION,
+        "lilypond_version": LILYPOND_VERSION,
+        "seed": sample_seed,
+        "render_id": candidate.render_id,
+        "render_parameters": candidate.render_parameters,
+        "degradation_preset": selected_config.preset,
+        "degradation_config": selected_config.to_dict(),
+        "degradations": degraded.recipe["operations"],
+        "input_path": input_path,
+        "clean_target_path": candidate.clean_path,
+        "mask_paths": candidate.mask_paths,
+        "recipe_path": recipe_path,
+        "hashes": {
+            "input": sha256_file(input_file),
+            "clean": candidate.clean_sha256,
+            "recipe": sha256_file(recipe_file),
+            **{f"mask_{name}": digest for name, digest in candidate.mask_sha256.items()},
+        },
+        "dimensions": {"width": candidate.width, "height": candidate.height},
+        "dpi": config.dpi,
+        "created_at": created_at,
+    }
 
 
 def _layout_variants(
@@ -473,6 +643,17 @@ def _layout_variants(
     return variants
 
 
+def _missing_trainable_masks(mask_paths: dict[str, Path]) -> list[str]:
+    """Return required semantic masks that are empty on an otherwise valid rendered page."""
+
+    missing: list[str] = []
+    for name in ("staff", "notation"):
+        with Image.open(mask_paths[name]) as mask:
+            if mask.getbbox() is None:
+                missing.append(name)
+    return missing
+
+
 def _dataset_metadata(
     config: DatasetGenerationConfig,
     *,
@@ -480,6 +661,7 @@ def _dataset_metadata(
     sample_count: int,
     split_counts: dict[str, int],
     source_manifest: Path,
+    skipped_page_count: int,
 ) -> dict[str, object]:
     config_dict = config.to_dict()
     return {
@@ -489,6 +671,7 @@ def _dataset_metadata(
         "generator_version": __version__,
         "lilypond_version": LILYPOND_VERSION,
         "sample_count": sample_count,
+        "skipped_page_count": skipped_page_count,
         "split_counts": split_counts,
         "source_splits": assignments,
         "source_manifest": str(source_manifest),
