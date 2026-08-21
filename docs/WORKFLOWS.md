@@ -89,8 +89,10 @@ uv run scorerestore infer input.pdf \
   --set checkpoint=runs/training-demo/checkpoints/best.pt
 ```
 
-The default configuration uses 1024px tiles with 128px overlap and preserves each input page's
-native raster dimensions. See [Architecture](ARCHITECTURE.md) for model and inference design.
+This writes `runs/inference-example/input_scorerestore.pdf`. The page images and metadata are
+removed after the PDF is safely written; pass `--debug` to retain them. The default configuration
+uses 1024px tiles with 128px overlap and preserves each input page's native raster dimensions. See
+[Architecture](ARCHITECTURE.md) for model and inference design.
 
 ## Evaluation and real-world comparisons
 

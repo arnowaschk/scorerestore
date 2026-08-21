@@ -2,7 +2,14 @@
 
 from .config import InferenceConfig, InferenceConfigError, load_inference_config
 from .io import InputPage, InputReadError, read_input_pages
-from .output import write_page_outputs, write_run_metadata
+from .output import (
+    cleaned_pdf_path,
+    planned_output_paths,
+    remove_page_outputs,
+    write_cleaned_pdf,
+    write_page_outputs,
+    write_run_metadata,
+)
 from .real_world import (
     CheckpointSelection,
     RealWorldComparisonError,
@@ -30,11 +37,15 @@ __all__ = [
     "RealWorldComparisonError",
     "RealWorldComparisonResult",
     "clean",
+    "cleaned_pdf_path",
     "compare_real_world",
     "load_checkpoint_model",
     "load_inference_config",
     "load_real_world_comparison_config",
+    "planned_output_paths",
     "read_input_pages",
+    "remove_page_outputs",
+    "write_cleaned_pdf",
     "write_page_outputs",
     "write_run_metadata",
 ]

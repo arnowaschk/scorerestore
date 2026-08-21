@@ -1,7 +1,7 @@
 """Input adapters for ordinary rasters, multipage TIFFs, and PDFs.
 
-Core tiled inference intentionally receives only Pillow/NumPy images.  PDF is isolated here as an
-input convenience and no output PDF reconstruction is attempted in V1.
+Core tiled inference intentionally receives only Pillow/NumPy images. PDF rasterization is isolated
+here from the cleaned-PDF output adapter.
 """
 
 from __future__ import annotations

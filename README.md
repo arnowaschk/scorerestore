@@ -9,7 +9,24 @@ and text masks alongside page cleaning. **It is not an OMR system and does not e
 MIDI.** Its main practical purpose is cleaning scores from noisy backgrounds and insufficient contrast.
 The current version 0.9.0 shows first prospective results, with further improvement already planned.
 
-## How ScoreRestore learned and works
+## Quickstart - clean PDFs
+
+The source-only release does not bundle a checkpoint. After obtaining or training (see below) a compatible `.pt` checkpoint, clean a PDF natively with CUDA when available, otherwise CPU:
+
+```bash
+uv sync --frozen
+uv run scorerestore infer path/to/score.pdf \
+  -c configs/inference/default.yaml \
+  --set checkpoint=/absolute/path/to/checkpoint.pt \
+  --set device=auto
+```
+
+Use `--set device=cpu` to force CPU execution. The command writes `clean/score_scorerestore.pdf`.
+Pass `-o DIRECTORY` to choose another output directory. Add `--debug` to retain per-page PNGs,
+masks, and metadata; otherwise those temporary files are deleted after the PDF is ready. If inference
+would replace or remove an existing output file, it asks for confirmation before loading the model.
+
+## Why ScoreRestore
 
 - **Score-aware supervision:** LilyPond supplies exact masks; every generated page retains its
   source, layout, recipe, and hashes.

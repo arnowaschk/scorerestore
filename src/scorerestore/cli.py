@@ -11,6 +11,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from PIL import Image, UnidentifiedImageError
+from tqdm import tqdm
 
 from scorerestore import __version__
 from scorerestore.baselines import evaluate_baseline, load_baseline_config
@@ -39,15 +40,20 @@ from scorerestore.evaluation import (
 )
 from scorerestore.inference import (
     InferenceConfigError,
+    InputPage,
     InputReadError,
     RealWorldComparisonConfigError,
     RealWorldComparisonError,
     clean,
+    cleaned_pdf_path,
     compare_real_world,
     load_checkpoint_model,
     load_inference_config,
     load_real_world_comparison_config,
+    planned_output_paths,
     read_input_pages,
+    remove_page_outputs,
+    write_cleaned_pdf,
     write_page_outputs,
     write_run_metadata,
 )
@@ -121,7 +127,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     inference.add_argument("input", type=Path, help="PNG, JPEG, TIFF, multipage TIFF, or PDF")
     inference.add_argument("-c", "--config", type=Path, required=True)
-    inference.add_argument("-o", "--output", type=Path, required=True)
+    inference.add_argument(
+        "-o", "--output", type=Path, default=Path("clean"), help="output directory (default: clean)"
+    )
+    inference.add_argument(
+        "--debug", action="store_true", help="retain per-page images and metadata alongside the PDF"
+    )
     inference.add_argument(
         "--set",
         dest="overrides",
@@ -607,16 +618,23 @@ def _run_training(args: argparse.Namespace) -> int:
 
 def _run_inference(args: argparse.Namespace) -> int:
     output = args.output.resolve()
-    if output.exists():
-        print(f"Inference failed: output directory already exists: {output}", file=sys.stderr)
-        return 1
     try:
         config = load_inference_config(args.config, overrides=tuple(args.overrides))
-        model, checkpoint_metadata = load_checkpoint_model(config.checkpoint, device=config.device)
         pages = read_input_pages(args.input, pdf_dpi=config.pdf_dpi)
-        output.mkdir(parents=True)
+        overwritten = _inference_overwrites(
+            output, pages, input_path=args.input, overlay=config.overlay, debug=args.debug
+        )
+    except (InferenceConfigError, InputReadError, ValueError, OSError) as error:
+        print(f"Inference failed: {error}", file=sys.stderr)
+        return 1
+    if overwritten and not _confirm_inference_overwrite(overwritten):
+        print("Inference cancelled; existing files were not changed.", file=sys.stderr)
+        return 1
+    try:
+        model, checkpoint_metadata = load_checkpoint_model(config.checkpoint, device=config.device)
+        output.mkdir(parents=True, exist_ok=True)
         paths = []
-        for page in pages:
+        for page in tqdm(pages, desc="Cleaning pages", unit="page"):
             result = clean(
                 page.image,
                 model=model,
@@ -637,11 +655,48 @@ def _run_inference(args: argparse.Namespace) -> int:
                 )
             )
         write_run_metadata(output, paths)
+        pdf_path = write_cleaned_pdf(output, pages, input_path=args.input)
+        if not args.debug:
+            remove_page_outputs(output, pages)
     except (InferenceConfigError, InputReadError, ValueError, OSError) as error:
         print(f"Inference failed: {error}", file=sys.stderr)
         return 1
-    print(f"Processed {len(pages)} page(s); outputs: {output}")
+    print(f"Processed {len(pages)} page(s); cleaned PDF: {pdf_path}")
     return 0
+
+
+def _inference_overwrites(
+    output: Path, pages: list[InputPage], *, input_path: Path, overlay: bool, debug: bool
+) -> tuple[Path, ...]:
+    """Reject unsuitable output roots and identify only files an inference would replace."""
+
+    if output.exists() and not output.is_dir():
+        raise ValueError(f"output path is not a directory: {output}")
+    planned = (
+        *planned_output_paths(output, pages, overlay=overlay),
+        cleaned_pdf_path(output, input_path),
+    )
+    directories = [path for path in planned if path.is_dir()]
+    if directories:
+        raise ValueError(f"output path expected to be a file but is a directory: {directories[0]}")
+    existing = {path for path in planned if path.exists()}
+    if not debug:
+        for page in pages:
+            page_root = output / f"page-{page.page_number:04d}"
+            if page_root.is_dir():
+                existing.update(path for path in page_root.rglob("*") if path.is_file())
+    return tuple(sorted(existing))
+
+
+def _confirm_inference_overwrite(paths: tuple[Path, ...]) -> bool:
+    print("Inference would overwrite the following existing file(s):", file=sys.stderr)
+    for path in paths:
+        print(f"  {path}", file=sys.stderr)
+    try:
+        response = input("Overwrite these files? [y/N] ")
+    except EOFError:
+        return False
+    return response.strip().lower() in {"y", "yes"}
 
 
 def _run_real_world_comparison(args: argparse.Namespace) -> int:
