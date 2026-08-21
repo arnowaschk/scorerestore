@@ -6,9 +6,10 @@ ScoreRestore V1 turns rights-cleared LilyPond score sources into pixel-aligned t
 page-cleaning and semantic-segmentation models, evaluates them against an OpenCV baseline, and
 creates full-resolution visual comparisons. It predicts independent background, staff, notation,
 and text masks alongside page cleaning. **It is not an OMR system and does not emit MusicXML or
-MIDI.**
+MIDI.** Its main practical purpose is cleaning scores from noisy backgrounds and insufficient contrast.
+The current version 0.9.0 shows first prospective results, with further improvement already planned.
 
-## Why ScoreRestore
+## How ScoreRestore learned and works
 
 - **Score-aware supervision:** LilyPond supplies exact masks; every generated page retains its
   source, layout, recipe, and hashes.
@@ -19,7 +20,7 @@ MIDI.**
 - **Evidence before claims:** test and challenge remain separate; unannotated scans are never given
   invented quantitative metrics.
 
-## Measured V1 result snapshot
+## Measured result snapshot
 
 The canonical CUDA run (`bash scripts/release/full_run_gpu.sh`) trains on the 40-source curated
 corpus and evaluates source-isolated synthetic pages. Its held-out **test** report (46 pages) is:
