@@ -73,7 +73,7 @@ jobs:
             -c configs/training/smoke.yaml -o /runs/ci-fresh-training \
             --set dataset_manifest=/data/ci-fresh/scorerestore-smoke-v1/manifests/samples.jsonl
           docker compose run --rm scorerestore sh -ceu '
-            input=$$(find /data/ci-fresh/scorerestore-smoke-v1/inputs -name "*.png" -print -quit)
-            scorerestore infer "$$input" -c configs/inference/default.yaml -o /runs/ci-fresh-inference \
+            input=$(find /data/ci-fresh/scorerestore-smoke-v1/inputs -name "*.png" -print -quit)
+            scorerestore infer "$input" -c configs/inference/default.yaml -o /runs/ci-fresh-inference \
               --set checkpoint=/runs/ci-fresh-training/checkpoints/best.pt
           '

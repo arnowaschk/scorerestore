@@ -767,8 +767,7 @@ def _existing_records(storage: FilesystemStorage) -> dict[str, dict[str, Any]]:
         records = read_manifest_records(manifest_path)
     except DatasetManifestError as error:
         raise DatasetGenerationError(
-            "existing update manifest is malformed; repair or remove it before resuming: "
-            f"{error}"
+            f"existing update manifest is malformed; repair or remove it before resuming: {error}"
         ) from error
     by_id: dict[str, dict[str, Any]] = {}
     for record in records:

@@ -114,8 +114,7 @@ def train(
         logger.update_environment({"resumed_at": _timestamp()})
     elif update and output.exists() and (output / "config.yaml").is_file():
         raise ValueError(
-            f"cannot resume {output}: checkpoints/last.pt is missing; "
-            "start a new output directory"
+            f"cannot resume {output}: checkpoints/last.pt is missing; start a new output directory"
         )
     else:
         logger.write_static(config, _environment(config, device, model, manifest))
@@ -407,7 +406,7 @@ class ExperimentLogger:
         retained = [
             row
             for row in self.rows
-            if isinstance(row.get("epoch"), int) and row["epoch"] <= epoch
+            if (isinstance(row.get("epoch"), int) and row["epoch"] <= epoch)
         ]
         if len(retained) != len(self.rows):
             self.rows = retained
