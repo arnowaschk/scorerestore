@@ -159,16 +159,17 @@ The Docker full run uses named profiles to isolate its artifacts. Start an inter
 `--update`, and use the same profile to continue it after an interruption:
 
 ```bash
-bash scripts/release/full_run_gpu.sh --profile default --update
+bash scripts/release/full_run_gpu.sh --update
 ```
 
-It writes `data/full-run-gpu-default/` and `runs/full-run-gpu-default/`. The script rebuilds the
-image before every invocation so changed configurations are included. To run the same CUDA workflow
-without Docker, use:
+It writes `data/full-run-gpu/` and `runs/full-run-gpu/`. The script rebuilds the image before every
+invocation so changed configurations are included. Pass `--profile NAME` to create an independent
+suffixed run. To run the same CUDA workflow without Docker, use:
 
 ```bash
-bash scripts/release/full_run_native.sh --profile default --update
+bash scripts/release/full_run_native.sh --update
 ```
 
-The native run writes `data/full-run-native-default/` and `runs/full-run-native-default/`; it
-requires native LilyPond 2.26.0 and CUDA-enabled PyTorch.
+The native run writes `data/full-run-native/` and `runs/full-run-native/`; it requires native
+LilyPond 2.26.0 and CUDA-enabled PyTorch. Pass `--profile NAME` to create an independent suffixed
+run.

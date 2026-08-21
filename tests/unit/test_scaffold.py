@@ -17,7 +17,7 @@ def test_compose_has_one_cpu_service_and_canonical_mounts() -> None:
 
     assert set(compose["services"]) == {"scorerestore"}
     service = compose["services"]["scorerestore"]
-    assert service["image"] == "scorerestore:0.1.0"
+    assert service["image"] == "scorerestore:0.9.0"
     assert set(service["volumes"]) == {
         "./data:/data",
         "./data:/app/data:ro",

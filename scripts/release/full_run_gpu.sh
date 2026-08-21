@@ -5,7 +5,7 @@ set -euo pipefail
 # experiments can coexist. Use --update from the first invocation to make every materializing
 # command resume-safe after an interruption.
 root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
-profile="default"
+profile=""
 update=false
 
 usage() {
@@ -34,13 +34,17 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-[[ "$profile" =~ ^[a-z0-9][a-z0-9._-]*$ ]] || {
+[[ -z "$profile" || "$profile" =~ ^[a-z0-9][a-z0-9._-]*$ ]] || {
   echo "Profile must use lowercase letters, digits, dots, underscores, or hyphens." >&2
   exit 2
 }
 
-data_root="/data/full-run-gpu-${profile}"
-runs_root="/runs/full-run-gpu-${profile}"
+run_name="full-run-gpu"
+if [[ -n "$profile" ]]; then
+  run_name+="-${profile}"
+fi
+data_root="/data/${run_name}"
+runs_root="/runs/${run_name}"
 manifest="${data_root}/scorerestore-demo-v1/manifests/samples.jsonl"
 source_manifest="${data_root}/curated-sources/manifest.yaml"
 compose=(docker compose -f compose.yaml -f compose.gpu.yaml)
@@ -60,7 +64,7 @@ print(f"CUDA available: {torch.cuda.get_device_name(0)} ({torch.version.cuda})")
 '
 "${compose[@]}" run --rm scorerestore scorerestore inspect provenance
 
-if [[ ! -f "$root/data/full-run-gpu-${profile}/curated-sources/manifest.yaml" ]]; then
+if [[ ! -f "$root/data/${run_name}/curated-sources/manifest.yaml" ]]; then
   "${compose[@]}" run --rm scorerestore python scripts/curate_mutopia_corpus.py \
     -o "${data_root}/curated-sources" "${update_args[@]}"
 fi
@@ -113,4 +117,4 @@ fi
   --checkpoint model_cleaned="${runs_root}/training-multitask/checkpoints/best.pt" \
   "${update_args[@]}"
 
-echo "Full CUDA run completed. Host outputs: data/full-run-gpu-${profile} and runs/full-run-gpu-${profile}"
+echo "Full CUDA run completed. Host outputs: data/${run_name} and runs/${run_name}"

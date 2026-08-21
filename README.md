@@ -69,13 +69,12 @@ uv run scorerestore dataset validate data/generated/scorerestore-smoke-v1/manife
 For the complete resumable CUDA experiment, use a Docker host with NVIDIA Container Toolkit:
 
 ```bash
-bash scripts/release/full_run_gpu.sh --profile default --update
+bash scripts/release/full_run_gpu.sh --update
 ```
 
-It writes data below `data/full-run-gpu-default/` and reports below
-`runs/full-run-gpu-default/`. Resume the same profile with `--update`; use another profile for an
-independent run. Hosts that provide CUDA but disallow Docker can use
-`bash scripts/release/full_run_native.sh --profile default --update` instead. See the
+It writes data below `data/full-run-gpu/` and reports below `runs/full-run-gpu/`. Resume that run
+with `--update`; pass `--profile NAME` to create an independent suffixed run. Hosts that provide
+CUDA but disallow Docker can use `bash scripts/release/full_run_native.sh --update` instead. See the
 [workflow guide](docs/WORKFLOWS.md) for the command details.
 
 ## Workflow at a glance
@@ -101,9 +100,13 @@ arbitrary source editions. PDFs in `assets/scores/real_world/` are qualitative i
 only. Trust a reported score or performance figure only when it comes from a retained artifact
 labelled **MEASURED**.
 
-The real-world comparison intentionally retains diagnostic failures—for example, tiled-inference
-seams—rather than presenting them as hidden exceptions. For model limitations and intended use,
-read the [model card](docs/MODEL_CARD.md); for planned work, see the [roadmap](docs/ROADMAP.md).
+The retained real-world inspection covers four unannotated public-domain score PDFs (24 pages) at
+native raster resolution. Its visual panels and reference-free diagnostics are not a quantitative
+restoration or readability benchmark. Historical scans can retain or exhibit small white voids
+within otherwise solid ink, particularly in large glyphs; this remains a known limitation. The
+comparison intentionally retains diagnostic failures—for example, tiled-inference seams—rather
+than presenting them as hidden exceptions. For model limitations and intended use, read the
+[model card](docs/MODEL_CARD.md); for planned work, see the [roadmap](docs/ROADMAP.md).
 
 ## Release and license
 

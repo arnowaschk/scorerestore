@@ -7,6 +7,8 @@ import io
 import json
 import platform
 import time
+from collections.abc import Callable, Iterator
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -66,12 +68,9 @@ def evaluate(
         raise ValueError(f"unknown baseline variant: {config.baseline_variant}")
     selected_ids = _visual_ids(records, config.report_seed, config.report_samples)
     output.mkdir(parents=True, exist_ok=update)
-    samples = [(record, dataset._load(record)) for record in records]
     baseline_rows: list[dict[str, Any]] = []
-    baseline_images: dict[str, Image.Image] = {}
-    for record, sample in samples:
+    for record, sample in _prefetched_samples(dataset._load_cleaning, records):
         baseline = clean_classical_variant(sample.image, baseline_config, variant)
-        baseline_images[record["sample_id"]] = baseline.image
         baseline_rows.append(_baseline_metric_row(record, baseline.image, sample.clean))
 
     rows: list[dict[str, Any]] = [*baseline_rows]
@@ -81,7 +80,7 @@ def evaluate(
             model_spec.checkpoint, device=config.device
         )
         model_rows: list[dict[str, Any]] = []
-        for record, sample in samples:
+        for record, sample in _prefetched_samples(dataset._load, records):
             result = clean(
                 sample.image,
                 model=model,
@@ -95,10 +94,11 @@ def evaluate(
             rows.append(row)
             model_rows.append(row)
             if record["sample_id"] in selected_ids:
+                baseline = clean_classical_variant(sample.image, baseline_config, variant)
                 _comparison_sheet(
                     output / "comparisons" / model_spec.name / f"{record['sample_id']}.png",
                     sample.image,
-                    baseline_images[record["sample_id"]],
+                    baseline.image,
                     result.cleaned,
                     sample.clean,
                     _overlay(sample.image, result.masks),
@@ -237,6 +237,27 @@ def benchmark(
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(_json(report), encoding="utf-8")
     return output
+
+
+def _prefetched_samples(
+    loader: Callable[[dict[str, Any]], Any], records: tuple[dict[str, Any], ...]
+) -> Iterator[tuple[dict[str, Any], Any]]:
+    """Load one following sample while the caller processes the current sample.
+
+    Evaluation is intentionally page-at-a-time: holding an entire rendered corpus in memory can
+    exceed RAM even when each inference itself is tiled. One background loader overlaps PNG I/O
+    and decoding with CPU/GPU work while keeping the resident working set bounded to two samples.
+    """
+
+    if not records:
+        return
+    with ThreadPoolExecutor(max_workers=1, thread_name_prefix="evaluation-loader") as executor:
+        future = executor.submit(loader, records[0])
+        for index, record in enumerate(records):
+            sample = future.result()
+            if index + 1 < len(records):
+                future = executor.submit(loader, records[index + 1])
+            yield record, sample
 
 
 def _completed_evaluation(output: Path) -> EvaluationResult | None:

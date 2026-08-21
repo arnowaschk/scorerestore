@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Native equivalent of full_run_gpu.sh for CUDA hosts that cannot launch Docker containers.
 root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
-profile="default"
+profile=""
 update=false
 
 usage() {
@@ -32,13 +32,16 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-[[ "$profile" =~ ^[a-z0-9][a-z0-9._-]*$ ]] || {
   echo "Profile must use lowercase letters, digits, dots, underscores, or hyphens." >&2
   exit 2
 }
 
-data_root="data/full-run-native-${profile}"
-runs_root="runs/full-run-native-${profile}"
+run_name="full-run-native"
+if [[ -n "$profile" ]]; then
+  run_name+="-${profile}"
+fi
+data_root="data/${run_name}"
+runs_root="runs/${run_name}"
 manifest="${data_root}/scorerestore-demo-v1/manifests/samples.jsonl"
 source_manifest="${data_root}/curated-sources/manifest.yaml"
 update_args=()

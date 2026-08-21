@@ -1,12 +1,12 @@
 # Controlled evaluation template: use matched data/split/budget settings for all checkpoint runs.
-dataset_manifest: data/full-run-gpu-default/scorerestore-demo-v1/manifests/samples.jsonl
+dataset_manifest: data/full-run-gpu/scorerestore-demo-v1/manifests/samples.jsonl
 models:
   - name: clean_unet
-    checkpoint: runs/full-run-gpu-default/training-clean/checkpoints/best.pt
+    checkpoint: runs/full-run-gpu/training-clean/checkpoints/best.pt
   - name: multitask_unet
-    checkpoint: runs/full-run-gpu-default/training-multitask/checkpoints/best.pt
+    checkpoint: runs/full-run-gpu/training-multitask/checkpoints/best.pt
   - name: pretrained_resnet18
-    checkpoint: runs/full-run-gpu-default/training-resnet18/checkpoints/best.pt
+    checkpoint: runs/full-run-gpu/training-resnet18/checkpoints/best.pt
 splits: [validation, test, challenge]
 inference:
   device: auto

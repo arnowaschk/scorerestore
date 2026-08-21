@@ -127,6 +127,28 @@ def test_materialize_validate_load_and_exactly_reproduce_smoke_dataset(
     assert sha256_file(missing_input) == records[0]["hashes"]["input"]
     assert preserved_input.stat().st_mtime_ns == preserved_mtime
 
+    # Parallelism does not affect the deterministic recipes, so a completed
+    # dataset can be resumed from a host with a different CPU allocation.
+    metadata_path = dataset_root / "manifests/dataset.json"
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    metadata["config"]["workers"] = 999
+    metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
+    assert (
+        main(
+            [
+                "generate",
+                "-c",
+                str(SMOKE_CONFIG),
+                "--output-root",
+                str(output_root),
+                "--lilypond",
+                str(dataset_lilypond_binary),
+                "--update",
+            ]
+        )
+        == 0
+    )
+
     records[1]["split"] = "test"
     manifest_path.write_text(
         "".join(json.dumps(record) + "\n" for record in records), encoding="utf-8"

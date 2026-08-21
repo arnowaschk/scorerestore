@@ -259,7 +259,13 @@ def generate_dataset(
 
 
 def _validate_existing_metadata(directory: Path, config: DatasetGenerationConfig) -> None:
-    """Reject an update that would combine artifacts from different configurations."""
+    """Reject an update that would combine artifacts from different configurations.
+
+    ``workers`` deliberately is not part of resume compatibility: it only controls
+    parallelism, while the generation seed and per-sample recipes keep the produced
+    artifacts deterministic.  This lets a dataset started in a container (or on a
+    larger host) resume on a machine with a different CPU allocation.
+    """
 
     metadata_path = directory / "manifests" / "dataset.json"
     if not metadata_path.is_file():
@@ -268,12 +274,24 @@ def _validate_existing_metadata(directory: Path, config: DatasetGenerationConfig
         metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
         raise DatasetGenerationError(f"cannot read existing dataset metadata: {error}") from error
-    expected = hashlib.sha256(_canonical_json(config.to_dict())).hexdigest()
-    if not isinstance(metadata, dict) or metadata.get("config_sha256") != expected:
+    existing_config = metadata.get("config") if isinstance(metadata, dict) else None
+    if not isinstance(existing_config, dict) or not _resume_configs_match(
+        existing_config, config.to_dict()
+    ):
         raise DatasetGenerationError(
             "existing dataset metadata is incompatible with this configuration; "
             "use a new dataset_id or output root"
         )
+
+
+def _resume_configs_match(existing: dict[str, object], current: dict[str, object]) -> bool:
+    """Compare the configuration fields that determine generated artifacts."""
+
+    existing = dict(existing)
+    current = dict(current)
+    existing.pop("workers", None)
+    current.pop("workers", None)
+    return _canonical_json(existing) == _canonical_json(current)
 
 
 def _complete_existing_result(

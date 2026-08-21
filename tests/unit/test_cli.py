@@ -34,7 +34,7 @@ def test_version_is_available(capsys: pytest.CaptureFixture[str]) -> None:
         main(["--version"])
 
     assert exit_info.value.code == 0
-    assert capsys.readouterr().out == "scorerestore 0.1.0\n"
+    assert capsys.readouterr().out == "scorerestore 0.9.0\n"
 
 
 def test_train_exposes_neural_backend_options(capsys: pytest.CaptureFixture[str]) -> None:

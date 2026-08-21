@@ -8,7 +8,7 @@ meanings explicit prevents silent target and metric inversion.
 
 from typing import Final
 
-__version__: Final = "0.1.0"
+__version__: Final = "0.9.0"
 
 from scorerestore.degradation import (
     DegradationConfig,

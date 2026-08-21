@@ -138,7 +138,7 @@ def _evaluation_fixture(tmp_path: Path) -> tuple[Path, Path, Path]:
                 "source_provenance": _provenance(),
                 "page": 1,
                 "split": split,
-                "generator_version": "0.1.0",
+                "generator_version": "0.9.0",
                 "lilypond_version": "2.26.0",
                 "seed": 1,
                 "render_parameters": _render_parameters(),

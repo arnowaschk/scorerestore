@@ -1,12 +1,12 @@
 dataset_id: scorerestore-demo-v1
 seed: 20260022
-target_samples: 2000
+target_samples: 1000
 source_manifest: assets/scores/manifest.yaml
 dpi: 300
 mask_threshold: 0.5
 strict_unknown_grobs: true
 layout:
-  staff_sizes: [8, 12, 16, 20, 24, 32, 48]
+  staff_sizes: [12, 16, 20, 24]
   paper_formats: [a4, letter]
   orientations: [portrait, landscape]
   margin_range_mm: [8, 16]
@@ -18,5 +18,4 @@ splits:
   challenge: 0.10
 degradation_configs: [light, medium, heavy]
 challenge_degradation_config: random
-# Use every CPU assigned to the process for independent rendering/degradation work.
-workers: auto
+workers: 8
