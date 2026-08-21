@@ -7,6 +7,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-08-21
+
 ### Added
 
 - Rights-cleared public-domain LilyPond starter corpus with strict manifest, rights, and SHA-256
@@ -34,6 +36,13 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Public-V1 release documentation: architecture, dataset/provenance, benchmarks, model card,
   roadmap, demo-checkpoint workflow, fresh-clone Compose gate, and a pinned/reviewable 40-source
   Mutopia curation catalogue that materializes into a strict hash-checked manifest.
+
+### Changed
+
+- The unsuffixed GPU full run is the canonical release artifact; `--profile NAME` creates an
+  independently suffixed run directory.
+- The release documentation now describes the 24-page unannotated real-world inspection and its
+  reference-free scope, including the known solid-ink void artifact on historical scans.
 
 ## [0.1.0] - 2026-08-11
 

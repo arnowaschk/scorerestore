@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: scorerestore:0.1.0
+    image: scorerestore:0.9.0
     # 1024px DataLoader batches are exchanged through /dev/shm. Docker's 64 MiB default is too
     # small once worker prefetching is enabled; this is RAM-backed shared memory, not disk space.
     shm_size: 1gb
